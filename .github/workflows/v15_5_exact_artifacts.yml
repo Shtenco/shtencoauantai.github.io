@@ -1,15 +1,6 @@
 name: V15.5 Exact Compiler and Polygon Archive-Fork Evidence
 
 on:
-  push:
-    branches: [ci/v15-5-artifacts]
-    paths:
-      - "v15_5_ci/contracts/**"
-      - "v15_5_ci/test/**"
-      - "v15_5_ci/scripts/**"
-      - "v15_5_ci/package.json"
-      - "v15_5_ci/hardhat.config.js"
-      - ".github/workflows/v15_5_exact_artifacts.yml"
   pull_request:
     branches: [main]
     paths:
@@ -98,8 +89,10 @@ jobs:
         run: |
           set -euo pipefail
           find artifacts/contracts/v15_5 artifacts/build-info reports \
-            -type f -print0 | sort -z | xargs -0 sha256sum \
+            -type f ! -name 'v15_5_evidence_sha256.txt' ! -name 'v15_5_exact_compiler_and_archive_fork_artifacts.tar.gz' \
+            -print0 | sort -z | xargs -0 sha256sum \
             > reports/v15_5_evidence_sha256.txt
+          sha256sum -c reports/v15_5_evidence_sha256.txt
           tar -czf reports/v15_5_exact_compiler_and_archive_fork_artifacts.tar.gz \
             artifacts/contracts/v15_5 artifacts/build-info reports/v15_5_*.json \
             reports/v15_5_*.png reports/v15_5_*.log reports/v15_5_evidence_sha256.txt
@@ -123,6 +116,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -- v15_5_ci/test/v15_5_mainnet_addlp_polygon_fork.js
+          git fetch origin ci/v15-5-artifacts
+          git rebase origin/ci/v15-5-artifacts
           git add \
             v15_5_ci/package-lock.json \
             v15_5_ci/artifacts/contracts/v15_5 \
