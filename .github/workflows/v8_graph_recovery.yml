@@ -63,9 +63,9 @@ jobs:
           set -euo pipefail
           response=$(curl -sS "$POLYGON_RPC_URL" \
             -H 'content-type: application/json' \
-            --data '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["0x5695f40",false],"id":1}')
+            --data '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["0x5695870",false],"id":1}')
           echo "$response" | tee reports/stateful_v8_recovery_archive_preflight.log
-          echo "$response" | grep -q '0x5695f40'
+          echo "$response" | grep -q '0x5695870'
 
       - name: Start pinned Polygon archive fork
         shell: bash
