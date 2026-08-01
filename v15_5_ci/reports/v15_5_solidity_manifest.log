@@ -1,0 +1,229 @@
+
+> synergy-v15-5-evidence@15.5.0 manifest
+> node scripts/build_compile_manifest.js
+
+{
+  "scenario": "synergy_v15_5_exact_solidity_compiler_artifact",
+  "verdict": "PASS",
+  "evidenceClass": "ACTUAL_SOLC_0_8_26_HARDHAT_COMPILER_OUTPUT",
+  "sourceBinding": {
+    "privateRepository": "Shtenco/ai_financial_system",
+    "privateBranch": "audit/stateful-supercycle-v8",
+    "privatePath": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+    "expectedGitBlobSha": "ad85d886f2797b030a89d2aa0b15f4a5c1446939",
+    "actualGitBlobSha": "ad85d886f2797b030a89d2aa0b15f4a5c1446939",
+    "sha256": "db91b560ad3cce8851f9c7f044f365cfd878ffc48c2522b3332515da3cdad825",
+    "bytes": 19485
+  },
+  "testBinding": {
+    "privatePath": "test/v15_5_mainnet_addlp_polygon_fork.js",
+    "expectedGitBlobSha": "f575fcb646af1c39ace6a0190f2e3886aaa37fa6",
+    "actualGitBlobSha": "f575fcb646af1c39ace6a0190f2e3886aaa37fa6",
+    "sha256": "81bd447707e8d47faefbf0127dd11fdd49b6a202ae73d320b13759f586be421f",
+    "bytes": 7136
+  },
+  "compiler": {
+    "solcVersion": "0.8.26+commit.8a97fa7a.Emscripten.clang",
+    "hardhatVersion": "2.22.19",
+    "optimizerEnabled": true,
+    "optimizerRuns": 500,
+    "viaIR": true,
+    "evmVersion": "cancun"
+  },
+  "mainArtifact": {
+    "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/MainnetAtomicAddLpExperimentV155.json",
+    "sha256": "c502538a50010eaed37faee344ba552eff46f4bcc1552379c83a91282f813fde",
+    "contractName": "MainnetAtomicAddLpExperimentV155",
+    "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+    "abiSha256": "2508450eec4555345782dfb95fcb69848f77def7183660ce18e9cec83ba23798",
+    "bytecodeBytes": 19581,
+    "bytecodeSha256": "525b062d2fbc441210ed7d091e10152f1f7b0961ce53c185b48bd63e9cd655cc",
+    "deployedBytecodeBytes": 13817,
+    "deployedBytecodeSha256": "e50f3ccd64581ca91cb5adb597be4a44e9c43c23f1ad62c8f43047d5114676ef"
+  },
+  "artifacts": [
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IAavePoolV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IAavePoolV155.json",
+      "sha256": "6ff2bb90e8a7e7c4148ee84ae7253266b4f37be496a6a6135f4ae8d1614e3f7c",
+      "contractName": "IAavePoolV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "3903253185e0f917f25efa92f7429a7ee7c6ca7696742602851434f731e350bc",
+      "bytecodeBytes": 0,
+      "bytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IFlashLoanSimpleReceiverV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IFlashLoanSimpleReceiverV155.json",
+      "sha256": "916719f51dbec67e29afdb3f20d722227f80ef656285e1d63043a971b20d4017",
+      "contractName": "IFlashLoanSimpleReceiverV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "e56fede8e4c8a5ceb33d79b9d7fda22efbb401ac8bd8117b6cf495a6e5d73472",
+      "bytecodeBytes": 0,
+      "bytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IQuickSwapV2FactoryV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IQuickSwapV2FactoryV155.json",
+      "sha256": "20cae5e40809bf1b9a743704c02df5769066db2ec21b62f0a2ccdaee770d160d",
+      "contractName": "IQuickSwapV2FactoryV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "f2b6f9424896883c423e5f9db1f6133bc30159ed1b46b34a2e814a29cb515a72",
+      "bytecodeBytes": 0,
+      "bytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IQuickSwapV2PairV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IQuickSwapV2PairV155.json",
+      "sha256": "0ee63f73baaeb4538f716bda7a4ba1bb28f7bef8e4512acb558aabacfdadcf2d",
+      "contractName": "IQuickSwapV2PairV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "756b84002ade2f490cdf7a789f043b232111ea1f814b04e696fb4473b83b11bc",
+      "bytecodeBytes": 0,
+      "bytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IQuickSwapV2RouterV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IQuickSwapV2RouterV155.json",
+      "sha256": "54d20a9808092df0a6b732abb7ba2384d3ee2e62e83dc25bc05597da7ec9ff83",
+      "contractName": "IQuickSwapV2RouterV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "7edb7713c947412c6f80b517b0d61452d92771342629c870c1f5d2150f927605",
+      "bytecodeBytes": 0,
+      "bytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IWrappedPolV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/IWrappedPolV155.json",
+      "sha256": "0b3db4212c3d7684d4853d5211cd528ca042d3fb387f72f14f03f16900632380",
+      "contractName": "IWrappedPolV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "19f5c42b081b442d8a2c4952de31775aef0512b3d2e2dec4a2150be11073bf0a",
+      "bytecodeBytes": 0,
+      "bytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/MainnetAtomicAddLpExperimentV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/MainnetAtomicAddLpExperimentV155.json",
+      "sha256": "c502538a50010eaed37faee344ba552eff46f4bcc1552379c83a91282f813fde",
+      "contractName": "MainnetAtomicAddLpExperimentV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "2508450eec4555345782dfb95fcb69848f77def7183660ce18e9cec83ba23798",
+      "bytecodeBytes": 19581,
+      "bytecodeSha256": "525b062d2fbc441210ed7d091e10152f1f7b0961ce53c185b48bd63e9cd655cc",
+      "deployedBytecodeBytes": 13817,
+      "deployedBytecodeSha256": "e50f3ccd64581ca91cb5adb597be4a44e9c43c23f1ad62c8f43047d5114676ef"
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/SynergyExperimentTokenV155.dbg.json",
+      "sha256": "5cbb2f8bed03ff3c80aad0c4b9da809279721bada207202712c3efcda4de18e2",
+      "contractName": null,
+      "sourceName": null,
+      "abiSha256": null,
+      "bytecodeBytes": 0,
+      "bytecodeSha256": null,
+      "deployedBytecodeBytes": 0,
+      "deployedBytecodeSha256": null
+    },
+    {
+      "path": "artifacts/contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol/SynergyExperimentTokenV155.json",
+      "sha256": "8ca751e2dabd2fb7e323842cd7b3d8796057c9fb217beb3bf6816865f9631a8e",
+      "contractName": "SynergyExperimentTokenV155",
+      "sourceName": "contracts/v15_5/MainnetAtomicAddLpExperimentV155.sol",
+      "abiSha256": "d447bb5f13a196df4b70c80cdd22839b7122fbbc96ba346bfc391d2accc0e52c",
+      "bytecodeBytes": 3022,
+      "bytecodeSha256": "dc087be3c5c35be3f3e78e18fbaa7bd93fca5b9dbd16ece6d41dab3bb4d42f20",
+      "deployedBytecodeBytes": 2064,
+      "deployedBytecodeSha256": "36bdfc5783574fadbb2d5cee45d6d084ec894d81a854727f10c1d0c0b308421a"
+    }
+  ],
+  "buildInfo": [
+    {
+      "path": "artifacts/build-info/716535eaa23ff1e9d4cd72e81f9b3edd.json",
+      "sha256": "c76d4641da21f00ebb98a57090817ab1d411e1d8d6edb0fa1fd40947496d5d45",
+      "bytes": 1380218
+    }
+  ]
+}

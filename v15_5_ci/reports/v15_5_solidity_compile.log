@@ -1,0 +1,5 @@
+
+> synergy-v15-5-evidence@15.5.0 compile
+> hardhat compile --force
+
+Compiled 11 Solidity files successfully (evm target: cancun).

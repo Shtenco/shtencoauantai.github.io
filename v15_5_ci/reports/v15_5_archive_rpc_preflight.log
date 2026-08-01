@@ -1,0 +1,41 @@
+{
+  "scenario": "synergy_v15_5_polygon_archive_rpc_preflight",
+  "verdict": "PASS",
+  "evidenceClass": "PUBLIC_POLYGON_PINNED_HISTORICAL_STATE_PREFLIGHT",
+  "pinnedBlock": 90000000,
+  "selectedHost": "polygon.drpc.org",
+  "selectedChecks": {
+    "host": "polygon.drpc.org",
+    "status": "PASS",
+    "chainId": "0x89",
+    "latestBlock": 91279975,
+    "pinnedBlock": 90000000,
+    "pinnedBlockHash": "0xb179e0aca3a467061947d4d7e699926aa3109da807e6bc2e2546113d55f66f1f",
+    "checks": {
+      "chainId137": true,
+      "latestAtOrAfterPinned": true,
+      "pinnedBlockPresent": true,
+      "historicalWpolCodePresent": true,
+      "historicalAaveCodePresent": true,
+      "historicalStateCallReturned": true
+    }
+  },
+  "attempts": [
+    {
+      "host": "polygon.drpc.org",
+      "status": "PASS",
+      "chainId": "0x89",
+      "latestBlock": 91279975,
+      "pinnedBlock": 90000000,
+      "pinnedBlockHash": "0xb179e0aca3a467061947d4d7e699926aa3109da807e6bc2e2546113d55f66f1f",
+      "checks": {
+        "chainId137": true,
+        "latestAtOrAfterPinned": true,
+        "pinnedBlockPresent": true,
+        "historicalWpolCodePresent": true,
+        "historicalAaveCodePresent": true,
+        "historicalStateCallReturned": true
+      }
+    }
+  ]
+}

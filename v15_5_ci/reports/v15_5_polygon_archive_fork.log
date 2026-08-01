@@ -1,0 +1,12 @@
+
+> synergy-v15-5-evidence@15.5.0 test:fork
+> hardhat test test/v15_5_mainnet_addlp_polygon_fork.js
+
+
+
+  SYNERGY V15.5 Polygon mainnet atomic ADDLP experiment
+    ✔ reverts the complete real-protocol flash cycle when internal actions cannot pay Aave premium (17030ms)
+
+
+  1 passing (17s)
+
