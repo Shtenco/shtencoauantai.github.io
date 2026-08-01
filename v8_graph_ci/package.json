@@ -5,8 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "compile": "hardhat compile --force",
-    "test:v8": "hardhat test test/stateful_v8_recovery_polygon_fork.js --network polygonFork",
-    "shadow": "python simulation/stateful_supercycle_v8_10x10.py",
+    "test:v8": "node scripts/prepare_recovery_test.js && hardhat test test/stateful_v8_recovery_polygon_fork.js --network polygonFork",
     "validate": "python scripts/validate_recovered_v8.py"
   },
   "devDependencies": {
