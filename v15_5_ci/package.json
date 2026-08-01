@@ -1,0 +1,19 @@
+{
+  "name": "synergy-v15-5-evidence",
+  "version": "15.5.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "compile": "hardhat compile --force",
+    "test:fork": "hardhat test test/v15_5_mainnet_addlp_polygon_fork.js",
+    "manifest": "node scripts/build_compile_manifest.js",
+    "augment": "python scripts/augment_fork_report.py"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "3.0.8",
+    "@openzeppelin/contracts": "5.6.1",
+    "ethers": "6.17.0",
+    "hardhat": "2.22.19",
+    "solc": "0.8.26"
+  }
+}
