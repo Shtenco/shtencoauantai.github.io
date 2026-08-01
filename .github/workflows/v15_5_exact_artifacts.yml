@@ -10,13 +10,22 @@ on:
       - "v15_5_ci/package.json"
       - "v15_5_ci/hardhat.config.js"
       - ".github/workflows/v15_5_exact_artifacts.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "v15_5_ci/contracts/**"
+      - "v15_5_ci/test/**"
+      - "v15_5_ci/scripts/**"
+      - "v15_5_ci/package.json"
+      - "v15_5_ci/hardhat.config.js"
+      - ".github/workflows/v15_5_exact_artifacts.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: v15-5-exact-artifacts
+  group: v15-5-exact-artifacts-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -38,8 +47,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: v15_5_ci/package-lock.json
 
       - uses: actions/setup-python@v5
         with:
@@ -61,15 +68,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p reports
           npm install --no-audit --no-fund
           python -m pip install --disable-pip-version-check matplotlib==3.9.2
-          node -e "console.log(require('solc').version())" | tee reports_solc_version.tmp
+          node -e "console.log(require('solc').version())" | tee reports/v15_5_solc_version.log
 
       - name: Prove public endpoint serves pinned historical Polygon state
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p reports
           python scripts/select_archive_rpc.py 2>&1 | tee reports/v15_5_archive_rpc_preflight.log
 
       - name: Compile exact V15.5 source with solc 0.8.26
