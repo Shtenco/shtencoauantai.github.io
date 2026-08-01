@@ -5,8 +5,8 @@
 
 
   SYNERGY V15.5 Polygon mainnet atomic ADDLP experiment
-    ✔ reverts the complete real-protocol flash cycle when internal actions cannot pay Aave premium (17030ms)
+    ✔ reverts the complete real-protocol flash cycle when internal actions cannot pay Aave premium (12450ms)
 
 
-  1 passing (17s)
+  1 passing (12s)
 
