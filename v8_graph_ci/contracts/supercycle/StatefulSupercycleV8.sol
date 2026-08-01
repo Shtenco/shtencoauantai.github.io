@@ -22,6 +22,11 @@ interface IAtomicQeQtExecutorV8 {
     function temporaryOutstanding() external view returns (uint256);
 }
 
+/// @notice V8 stateful acceptance layer around the atomic QE/QT executor.
+/// The contract does not invent graph profit: it only accepts a cycle when the
+/// real settlement-token balance of the protocol treasury increases and the
+/// underlying executor has atomically restored the touched internal LP,
+/// temporary supply and constant-product invariant.
 contract StatefulSupercycleV8 {
     uint256 public constant INTERNAL_EDGE_COUNT = 10;
     uint256 public constant EXTERNAL_EDGE_COUNT = 10;
