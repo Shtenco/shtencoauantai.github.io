@@ -1,0 +1,125 @@
+name: V15.5 Exact Compiler and Polygon Archive-Fork Evidence
+
+on:
+  push:
+    branches: [ci/v15-5-artifacts]
+    paths:
+      - "v15_5_ci/contracts/**"
+      - "v15_5_ci/test/**"
+      - "v15_5_ci/scripts/**"
+      - "v15_5_ci/package.json"
+      - "v15_5_ci/hardhat.config.js"
+      - ".github/workflows/v15_5_exact_artifacts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v15-5-exact-artifacts
+  cancel-in-progress: false
+
+jobs:
+  compile-and-fork:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: v15_5_ci
+    env:
+      V155_FORK_BLOCK: "90000000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/v15-5-artifacts
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: v15_5_ci/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Normalize exact private test EOF
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('test/v15_5_mainnet_addlp_polygon_fork.js')
+          data = path.read_bytes()
+          if not data.endswith(b'\n'):
+              path.write_bytes(data + b'\n')
+          PY
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check matplotlib==3.9.2
+          node -e "console.log(require('solc').version())" | tee reports_solc_version.tmp
+
+      - name: Prove public endpoint serves pinned historical Polygon state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          python scripts/select_archive_rpc.py 2>&1 | tee reports/v15_5_archive_rpc_preflight.log
+
+      - name: Compile exact V15.5 source with solc 0.8.26
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run compile 2>&1 | tee reports/v15_5_solidity_compile.log
+          npm run manifest 2>&1 | tee reports/v15_5_solidity_manifest.log
+
+      - name: Execute pinned Polygon archive-fork experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:fork 2>&1 | tee reports/v15_5_polygon_archive_fork.log
+          npm run augment 2>&1 | tee reports/v15_5_polygon_archive_fork_verdict.log
+
+      - name: Create evidence checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          find artifacts/contracts/v15_5 artifacts/build-info reports \
+            -type f -print0 | sort -z | xargs -0 sha256sum \
+            > reports/v15_5_evidence_sha256.txt
+          tar -czf reports/v15_5_exact_compiler_and_archive_fork_artifacts.tar.gz \
+            artifacts/contracts/v15_5 artifacts/build-info reports/v15_5_*.json \
+            reports/v15_5_*.png reports/v15_5_*.log reports/v15_5_evidence_sha256.txt
+
+      - name: Upload immutable workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15-5-exact-solc-and-polygon-archive-fork
+          path: |
+            v15_5_ci/artifacts/contracts/v15_5
+            v15_5_ci/artifacts/build-info
+            v15_5_ci/reports/v15_5_*
+          if-no-files-found: error
+          compression-level: 6
+
+      - name: Commit compiler and fork outputs to evidence branch
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -- v15_5_ci/test/v15_5_mainnet_addlp_polygon_fork.js
+          git add \
+            v15_5_ci/package-lock.json \
+            v15_5_ci/artifacts/contracts/v15_5 \
+            v15_5_ci/artifacts/build-info \
+            v15_5_ci/reports
+          git commit -m "Commit exact V15.5 compiler and Polygon archive-fork evidence" || exit 0
+          git push origin HEAD:ci/v15-5-artifacts
