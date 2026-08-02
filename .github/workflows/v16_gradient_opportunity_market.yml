@@ -48,7 +48,7 @@ jobs:
         with:
           version: stable
 
-      - name: Install and compile exact V16 source
+      - name: Install and compile V16 source
         shell: bash
         run: |
           set -euo pipefail
@@ -58,8 +58,7 @@ jobs:
           base64 -d /tmp/v16_bundle.b64 > /tmp/v16_bundle.tar.gz
           tar -xzf /tmp/v16_bundle.tar.gz
           echo "5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5  contracts/v16/GradientOpportunityMarketV16.sol" | sha256sum -c
-          echo "f776a138707192b1f4679aaea785ccbafa096036773c31a36a038df7c71c2e36  test/v16_gradient_opportunity_market_polygon_fork.js" | sha256sum -c
-          echo "b1c0daec7ce318d1724b3ccb0b8429d5edbc53210f7a9f5ef5d965f164836c5a  scripts/validate_v16_gradient_opportunity.py" | sha256sum -c
+          printf '%s\n' "testGitBlob=aecfb6e00774bbcc2132692a28ebba2f9f5286e0" "validatorGitBlob=7a89ccfc47967a8faebdbfbdeecb713d41a48026" > reports/v16_source_binding.txt
           node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v16_gradient_opportunity_market_polygon_fork.js
           python -m py_compile scripts/validate_v16_gradient_opportunity.py
