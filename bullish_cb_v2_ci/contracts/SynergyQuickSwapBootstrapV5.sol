@@ -10,7 +10,7 @@ contract SynergyQuickSwapBootstrapV5 {
 
     address public constant QUICKSWAP_V2_ROUTER = 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff;
     address public constant QUICKSWAP_V2_FACTORY = 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32;
-    address public constant POLYGON_USDT = 0xc2132d05d31c914a87c6611c10748aeb04b58e8f;
+    address public constant POLYGON_USDT = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
     address public constant POLYGON_WPOL = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
     uint256 public constant INITIAL_TOTAL_SUPPLY = 1_000_000 ether;
     uint256 public constant INITIAL_POOL_SYNA = 500_000 ether;
