@@ -11,6 +11,7 @@ const USDT = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f";
 const WPOL = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270";
 const WPOL_USDT_PAIR = "0x604229c960e5cacf2aaeac8be68ac07ba9df81c3";
 const DEV_MNEMONIC = "test test test test test test test test test test test junk";
+const CYCLE_GAS_LIMIT = 8_000_000n;
 const ERC20 = [
   "function balanceOf(address) view returns(uint256)",
   "function transfer(address,uint256) returns(bool)",
@@ -95,7 +96,8 @@ async function deployFixture() {
       ethers.parseEther("500000"),
       1_000_000n,
       1_000_000n,
-      block.timestamp + 3600
+      block.timestamp + 3600,
+      { gasLimit: CYCLE_GAS_LIMIT }
     )
   ).wait());
   return { owner, ownerAddress, token, controller, setupGas };
@@ -106,7 +108,9 @@ async function executeCycles(controller, start, end, mineSpacing = true) {
   let refillEvents = 0;
   for (let i = start; i < end; i += 1) {
     const block = await provider.getBlock("latest");
-    const receipt = await (await controller.executeCycle(i, block.timestamp + 3600, 0)).wait();
+    const receipt = await (
+      await controller.executeCycle(i, block.timestamp + 3600, 0, { gasLimit: CYCLE_GAS_LIMIT })
+    ).wait();
     gas += receiptCost(receipt);
     for (const log of receipt.logs) {
       try {
@@ -171,7 +175,9 @@ describe("BullishQuickSwapCentralBankV2 exact Polygon fork", function () {
     let gasRefillExecuted = false;
     if (treasury >= maxUsdt) {
       const block = await provider.getBlock("latest");
-      await (await controller.refillKeeperGas(exactPol, maxUsdt, block.timestamp + 3600)).wait();
+      await (
+        await controller.refillKeeperGas(exactPol, maxUsdt, block.timestamp + 3600, { gasLimit: 2_000_000n })
+      ).wait();
       gasRefillExecuted = (await controller.cumulativeGasRefillUsdt()) > 0n;
       assert(gasRefillExecuted);
     }
