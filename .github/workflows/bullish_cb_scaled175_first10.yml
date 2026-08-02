@@ -23,12 +23,12 @@ jobs:
       run:
         working-directory: bullish_cb_v2_ci
     env:
-      POLYGON_RPC_URL: https://polygon.drpc.org
-      DEPLOYER: 0x6946999DBCE63b140B1bB9D475F7c357130909E5
-      ROUTER: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
-      FACTORY: 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32
-      USDT: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F
-      WPOL: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      DEPLOYER: "0x6946999DBCE63b140B1bB9D475F7c357130909E5"
+      ROUTER: "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff"
+      FACTORY: "0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32"
+      USDT: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
+      WPOL: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,8 +61,8 @@ jobs:
       run:
         working-directory: bullish_cb_v2_ci
     env:
-      POLYGON_RPC_URL: https://polygon.drpc.org
-      LOCAL_FORK_URL: http://127.0.0.1:8545
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      LOCAL_FORK_URL: "http://127.0.0.1:8545"
       FORK_BLOCK_NUMBER: "90790000"
     steps:
       - uses: actions/checkout@v4
