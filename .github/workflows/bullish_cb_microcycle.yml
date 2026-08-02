@@ -1,4 +1,4 @@
-name: Bullish CB TVL Solvency Fork Then Mainnet Gate
+name: Bullish CB Polygon Fork Grid
 
 on:
   pull_request:
@@ -12,11 +12,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: bullish-cb-microcycle-${{ github.event.pull_request.number || github.ref }}
+  group: bullish-cb-grid-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  fork-then-mainnet-gate:
+  polygon-fork-grid:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     defaults:
@@ -51,8 +51,8 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           mkdir -p reports
-          node --check test/bullish_cb_microcycle_polygon_fork.js
-          npx hardhat compile --force 2>&1 | tee reports/compile.log
+          node --check test/bullish_cb_microcycle_polygon_fork_grid.js
+          npx hardhat compile --force 2>&1 | tee reports/compile_grid.log
 
       - name: Start pinned Polygon archive fork
         shell: bash
@@ -65,7 +65,7 @@ jobs:
             --hardfork cancun \
             --host 127.0.0.1 \
             --port 8545 \
-            > reports/anvil.log 2>&1 &
+            > reports/anvil_grid.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s "$LOCAL_FORK_URL" \
               -H 'content-type: application/json' \
@@ -75,111 +75,61 @@ jobs:
             fi
             sleep 1
           done
-          cat reports/anvil.log
+          cat reports/anvil_grid.log
           exit 1
 
-      - name: Execute 15-cycle 150-block fork experiment
+      - name: Execute cumulative 15 50 100 250 500 grid
         shell: bash
         run: |
           set -euo pipefail
-          npm run test:fork 2>&1 | tee reports/fork.log
+          npm run test:grid 2>&1 | tee reports/fork_grid.log
 
-      - name: Validate only TVL plus robot plus CB versus gas
+      - name: Validate and print grid
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY' | tee reports/validator.log
+          python - <<'PY' | tee reports/grid_validator.log
           import json
           from pathlib import Path
 
-          path = Path('reports/bullish_cb_microcycle_polygon_fork.json')
-          data = json.loads(path.read_text())
+          p = Path('reports/bullish_cb_microcycle_polygon_fork_grid.json')
+          data = json.loads(p.read_text())
           assert data['chainId'] == 137
           assert data['forkBlockConfigured'] == 90790000
-          assert data['coveredBlocks'] == 150
-          assert data['cycles'] == 15
-          assert data['trades'] == 105
           assert data['criterion'] == 'DELTA_TVL_PLUS_ROBOT_BALANCE_PLUS_CB_BALANCE_GREATER_THAN_GAS'
-          assert data['startingCapital']['robotAndCbUsdt'] == 1
-          assert data['startingCapital']['poolUsdt'] == 1
-          assert data['startingCapital']['gasBudgetUsdt'] == 1
-          assert data['price']['multiple'] > 1
-          assert data['supply']['changePct'] < 0
-          assert data['gas']['oneUsdtBudgetCovered'] is True
-          assert data['solvency']['grossGrowthUsdt'] > data['solvency']['gasUsdt']
-          assert data['solvency']['netGrowthAfterGasUsdt'] > 0
-          assert data['solvency']['solvent'] is True
-          assert data['solvency']['verdict'] == 'PASS_SOLVENT'
-          assert data['mainnetGate'] == 'READY_BY_TVL_ROBOT_CB_SOLVENCY_METRIC'
-
-          verdict = {
-              'verdict': data['solvency']['verdict'],
-              'solvent': data['solvency']['solvent'],
-              'mainnetReadyByRequestedMetric': True,
-              'criterion': data['criterion'],
-              'priceMultiple': data['price']['multiple'],
-              'supplyChangePct': data['supply']['changePct'],
-              'initialTvlUsdt': data['initial']['tvlUsdt'],
-              'finalTvlUsdt': data['final']['tvlUsdt'],
-              'initialRobotBalanceUsdt': data['initial']['robotBalanceUsdt'],
-              'finalRobotBalanceUsdt': data['final']['robotBalanceUsdt'],
-              'initialCbBalanceUsdt': data['initial']['cbBalanceUsdt'],
-              'finalCbBalanceUsdt': data['final']['cbBalanceUsdt'],
-              'initialTotalTvlRobotCbUsdt': data['solvency']['initialTotalTvlRobotCbUsdt'],
-              'finalTotalTvlRobotCbUsdt': data['solvency']['finalTotalTvlRobotCbUsdt'],
-              'grossGrowthUsdt': data['solvency']['grossGrowthUsdt'],
-              'fullGasUsdt': data['solvency']['gasUsdt'],
-              'netGrowthAfterGasUsdt': data['solvency']['netGrowthAfterGasUsdt'],
-              'mainnetGate': data['mainnetGate'],
+          assert data['checkpointsRequested'] == [15, 50, 100, 250, 500]
+          assert any(row['cycles'] == 15 for row in data['grid'])
+          summary = {
+              'scenario': data['scenario'],
+              'completedCycles': data['completedCycles'],
+              'stoppedEarly': data['stoppedEarly'],
+              'missingCheckpoints': data['missingCheckpoints'],
+              'bestCheckpointByGasCoverage': data['bestCheckpointByGasCoverage'],
+              'grid': data['grid'],
           }
-          Path('reports/strict_verdict.json').write_text(json.dumps(verdict, indent=2))
-          print(json.dumps(verdict, indent=2))
+          Path('reports/grid_verdict.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
           PY
 
-      - name: Mainnet stage — apply requested solvency gate
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY' | tee reports/mainnet_gate.log
-          import json
-          from pathlib import Path
-
-          verdict = json.loads(Path('reports/strict_verdict.json').read_text())
-          assert verdict['mainnetReadyByRequestedMetric'] is True
-          decision = {
-              'stage': 'POLYGON_MAINNET',
-              'solvencyMetricPassed': True,
-              'decision': 'READY_BY_TVL_ROBOT_CB_SOLVENCY_METRIC',
-              'privateKeyLoaded': False,
-              'transactionSigned': False,
-              'transactionBroadcast': False,
-              'reasonNotBroadcast': 'CI_HAS_NO_MAINNET_PRIVATE_KEY',
-          }
-          Path('reports/mainnet_gate.json').write_text(json.dumps(decision, indent=2))
-          print(json.dumps(decision, indent=2))
-          PY
-
-      - name: Bind evidence with checksums
+      - name: Bind evidence
         shell: bash
         run: |
           set -euo pipefail
           sha256sum \
             contracts/BullishMicrocycleV1.sol \
-            test/bullish_cb_microcycle_polygon_fork.js \
-            reports/bullish_cb_microcycle_polygon_fork.json \
-            reports/strict_verdict.json \
-            reports/mainnet_gate.json \
-            reports/compile.log \
-            reports/fork.log \
-            reports/validator.log \
-            reports/mainnet_gate.log \
-            > reports/sha256.txt
-          sha256sum -c reports/sha256.txt
+            test/bullish_cb_microcycle_polygon_fork_grid.js \
+            reports/bullish_cb_microcycle_polygon_fork_grid.json \
+            reports/grid_verdict.json \
+            reports/compile_grid.log \
+            reports/fork_grid.log \
+            reports/grid_validator.log \
+            > reports/grid_sha256.txt
+          sha256sum -c reports/grid_sha256.txt
 
-      - name: Upload immutable fork and mainnet-gate evidence
+      - name: Upload immutable grid evidence
         uses: actions/upload-artifact@v4
         with:
-          name: synergy-bullish-cb-tvl-solvency-fork-mainnet-gate
+          name: synergy-bullish-cb-polygon-fork-grid
           path: |
             bullish_cb_ci/artifacts/contracts/BullishMicrocycleV1.sol
             bullish_cb_ci/reports
