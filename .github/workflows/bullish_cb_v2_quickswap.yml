@@ -1,0 +1,112 @@
+name: Bullish QuickSwap V2 Refill Polygon Fork
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_v2_ci/**"
+      - ".github/workflows/bullish_cb_v2_quickswap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bullish-qs-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-compile-and-fork:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      LOCAL_FORK_URL: http://127.0.0.1:8545
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install and exact compile
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          mkdir -p reports
+          node --check test/bullish_quickswap_refill_v2_polygon_fork.js
+          npx hardhat compile --force 2>&1 | tee reports/compile.log
+      - name: Start pinned Polygon fork
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/anvil.log
+          exit 1
+      - name: Execute first-ten and refill fork tests
+        run: npm run test:fork 2>&1 | tee reports/fork.log
+      - name: Validate reports
+        run: |
+          python - <<'PY' | tee reports/validator.log
+          import json
+          from pathlib import Path
+          first = json.loads(Path('reports/bullish_qs_v2_first10_fork.json').read_text())
+          refill = json.loads(Path('reports/bullish_qs_v2_refill_fork.json').read_text())
+          assert first['chainId'] == 137
+          assert first['forkBlock'] == 90790000
+          assert first['cycles'] == 10
+          assert first['trades'] == 70
+          assert first['netGrowthAfterGasUsdt'] > 0
+          assert first['verdict'] == 'PASS_POSITIVE_FIRST_10'
+          assert refill['cycles'] == 160
+          assert refill['robotRefillEvents'] > 0
+          summary = {'first10': first, 'refill': refill}
+          Path('reports/verdict.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+      - name: Bind evidence
+        run: |
+          sha256sum \
+            contracts/BullishQuickSwapRefillV2.sol \
+            test/bullish_quickswap_refill_v2_polygon_fork.js \
+            reports/bullish_qs_v2_first10_fork.json \
+            reports/bullish_qs_v2_refill_fork.json \
+            reports/verdict.json \
+            reports/compile.log \
+            reports/fork.log \
+            reports/validator.log \
+            > reports/sha256.txt
+          sha256sum -c reports/sha256.txt
+      - name: Upload immutable evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bullish-qs-v2-refill-polygon-fork
+          path: |
+            bullish_cb_v2_ci/artifacts/contracts/BullishQuickSwapRefillV2.sol
+            bullish_cb_v2_ci/reports
+          if-no-files-found: error
+          compression-level: 6
