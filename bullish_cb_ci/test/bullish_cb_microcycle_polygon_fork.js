@@ -121,7 +121,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
   it("runs 15 atomic cycles over 150 blocks and blocks mainnet on strict economics", async function () {
     const chainId = Number((await provider.getNetwork()).chainId);
     assert.equal(chainId, 137);
-    const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider);
+    const owner = new ethers.NonceManager(ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider));
     const usdt = await fundFixture(owner);
     const { token, controller, pool, setupGasWei } = await deploySystem(owner, usdt);
 
@@ -244,7 +244,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
   });
 
   it("rejects public calls, replay, stale deadline and invented NAV", async function () {
-    const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider);
+    const owner = new ethers.NonceManager(ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider));
     const attacker = ethers.Wallet.createRandom().connect(provider);
     const attackerAddress = await attacker.getAddress();
     await rpc("anvil_setBalance", [attackerAddress, "0x3635c9adc5dea00000"]);
