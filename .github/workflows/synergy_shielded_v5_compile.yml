@@ -1,0 +1,36 @@
+name: Synergy Shielded V5 Compile
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_v2_ci/contracts/BullishQuickSwapShieldedV5.sol"
+      - "bullish_cb_v2_ci/contracts/SynergyQuickSwapBootstrapV5.sol"
+      - "bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol"
+      - ".github/workflows/synergy_shielded_v5_compile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile all V5 sources
+        run: |
+          rm -f contracts/BullishQuickSwapDirectV4.sol
+          rm -rf artifacts cache
+          npx hardhat compile --force
