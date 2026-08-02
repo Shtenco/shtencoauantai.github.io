@@ -8,6 +8,7 @@ on:
       - "bullish_cb_v2_ci/contracts/SynergyQuickSwapBootstrapV5.sol"
       - "bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol"
       - "bullish_cb_v2_ci/tools/synergy_local_signer.mjs"
+      - "bullish_cb_v2_ci/package.json"
       - ".github/workflows/synergy_shielded_v5_compile.yml"
   workflow_dispatch:
 
@@ -36,10 +37,8 @@ jobs:
         with:
           node-version: "22"
       - name: Install dependencies
-        run: |
-          npm install --no-audit --no-fund
-          npm install --no-save esbuild
-      - name: Compile all V5 sources
+        run: npm install --no-audit --no-fund
+      - name: Compile and validate V5 deployment size
         run: |
           set -euo pipefail
           rm -f contracts/BullishQuickSwapDirectV4.sol
@@ -47,6 +46,17 @@ jobs:
           npx hardhat compile --force
           mkdir -p bundle
           cp artifacts/contracts/SynergyQuickSwapBootstrapV5.sol/SynergyQuickSwapBootstrapV5.json bundle/
+          node - <<'NODE' | tee bundle/bytecode-sizes.json
+          const fs = require('fs');
+          const artifact = JSON.parse(fs.readFileSync('bundle/SynergyQuickSwapBootstrapV5.json'));
+          const result = {
+            initCodeBytes: (artifact.bytecode.length - 2) / 2,
+            deployedCodeBytes: (artifact.deployedBytecode.length - 2) / 2,
+          };
+          result.withinEip3860InitCodeLimit = result.initCodeBytes <= 49152;
+          console.log(JSON.stringify(result, null, 2));
+          if (!result.withinEip3860InitCodeLimit) process.exit(2);
+          NODE
       - name: Query live Polygon mainnet
         run: |
           set -euo pipefail
