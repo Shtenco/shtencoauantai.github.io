@@ -8,6 +8,7 @@ const USDT = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F";
 const WPOL_USDT_PAIR = "0x604229c960e5CACF2aaEAc8Be68Ac07BA9dF81c3";
 const DEV_MNEMONIC = "test test test test test test test test test test test junk";
 const ERC20 = [
+  "function balanceOf(address) view returns(uint256)",
   "function transfer(address,uint256) returns(bool)",
   "function approve(address,uint256) returns(bool)"
 ];
@@ -68,13 +69,17 @@ async function deployFixture() {
   const usdt = new ethers.Contract(USDT, ERC20, owner);
   const artifact = await hre.artifacts.readArtifact("SynergyQuickSwapBootstrapV5");
   const nonce = await provider.getTransactionCount(ownerAddress, "pending");
-  const predicted = ethers.getCreateAddress({ from: ownerAddress, nonce: nonce + 1 });
+  const predicted = ethers.getCreateAddress({ from: ownerAddress, nonce: nonce + 2 });
   await (await usdt.approve(predicted, 2_000_000n)).wait();
+  await (await usdt.transfer(predicted, 1n)).wait();
   const salt = ethers.keccak256(ethers.toUtf8Bytes("SYNERGY_V5_SECURITY_FORK_SECRET"));
   const bootstrap = await new ethers.ContractFactory(artifact.abi, artifact.bytecode, owner)
     .deploy(ownerAddress, salt, { gasLimit: 28_000_000n });
   await bootstrap.deploymentTransaction().wait();
   assert.equal((await bootstrap.getAddress()).toLowerCase(), predicted.toLowerCase());
+  assert.equal(await usdt.balanceOf(await bootstrap.getAddress()), 1n, "prefunded dust missing");
+  await (await bootstrap.rescueToken(USDT, ownerAddress, 1n)).wait();
+  assert.equal(await usdt.balanceOf(await bootstrap.getAddress()), 0n, "dust rescue failed");
 
   const token = new ethers.Contract(
     await bootstrap.token(),
@@ -92,7 +97,7 @@ async function deployFixture() {
 describe("Synergy Shielded V5 explicit security proof", function () {
   this.timeout(600000);
 
-  it("fails closed on zero quote, public bypass, QuickSwap front-run and stale parent", async function () {
+  it("fails closed on zero quote, dust, public bypass, QuickSwap front-run and stale parent", async function () {
     const { owner, ownerAddress, bootstrap, token, controller } = await deployFixture();
     assert.equal(await token.name(), "Synergy Coin");
     assert.equal(await token.symbol(), "SYNA");
