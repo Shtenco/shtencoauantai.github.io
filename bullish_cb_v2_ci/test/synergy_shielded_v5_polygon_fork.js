@@ -5,7 +5,6 @@ const hre = require("hardhat");
 const { ethers } = hre;
 
 const provider = new ethers.JsonRpcProvider(process.env.LOCAL_FORK_URL || "http://127.0.0.1:8545");
-const ROUTER = "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff";
 const USDT = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F";
 const WPOL = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";
 const WPOL_USDT_PAIR = "0x604229c960e5CACF2aaEAc8Be68Ac07BA9dF81c3";
@@ -17,7 +16,6 @@ const ERC20 = [
 ];
 const PAIR = [
   "function token0() view returns(address)",
-  "function token1() view returns(address)",
   "function getReserves() view returns(uint112,uint112,uint32)",
   "function sync()"
 ];
@@ -50,14 +48,32 @@ async function deployFixture() {
   await fundUsdt(ownerAddress, 3_000_000n);
   const usdt = new ethers.Contract(USDT, ERC20, owner);
   const artifact = await hre.artifacts.readArtifact("SynergyQuickSwapBootstrapV5");
+  const currentNonce = await provider.getTransactionCount(ownerAddress, "pending");
+  const predictedBootstrap = ethers.getCreateAddress({
+    from: ownerAddress,
+    nonce: currentNonce + 1
+  });
+  const secretSalt = ethers.keccak256(
+    ethers.toUtf8Bytes("SYNERGY_SHIELDED_V5_PINNED_FORK_SECRET")
+  );
+
   let setupGas = 0n;
-  const bootstrap = await new ethers.ContractFactory(artifact.abi, artifact.bytecode, owner).deploy(ownerAddress);
+  setupGas += cost(await (await usdt.approve(predictedBootstrap, 2_000_000n)).wait());
+  const bootstrap = await new ethers.ContractFactory(artifact.abi, artifact.bytecode, owner)
+    .deploy(ownerAddress, secretSalt, { gasLimit: 28_000_000n });
   setupGas += cost(await bootstrap.deploymentTransaction().wait());
-  setupGas += cost(await (await usdt.approve(await bootstrap.getAddress(), 2_000_000n)).wait());
-  const block = await provider.getBlock("latest");
-  setupGas += cost(await (await bootstrap.bootstrap(block.timestamp + 90, { gasLimit: 15_000_000n })).wait());
-  const token = new ethers.Contract(await bootstrap.token(), (await hre.artifacts.readArtifact("RebaseSynaExactV3")).abi, owner);
-  const controller = new ethers.Contract(await bootstrap.controller(), (await hre.artifacts.readArtifact("BullishQuickSwapShieldedV5")).abi, owner);
+  assert.equal((await bootstrap.getAddress()).toLowerCase(), predictedBootstrap.toLowerCase());
+
+  const token = new ethers.Contract(
+    await bootstrap.token(),
+    (await hre.artifacts.readArtifact("RebaseSynaExactV3")).abi,
+    owner
+  );
+  const controller = new ethers.Contract(
+    await bootstrap.controller(),
+    (await hre.artifacts.readArtifact("BullishQuickSwapShieldedV5")).abi,
+    owner
+  );
   return { owner, ownerAddress, bootstrap, token, controller, setupGas };
 }
 
@@ -88,13 +104,15 @@ async function expectRevert(promise, fragment) {
 describe("Synergy Coin Shielded V5", function () {
   this.timeout(600000);
 
-  it("creates the pair atomically and blocks zero/stale/public bypass paths", async function () {
-    const { owner, bootstrap, token, controller } = await deployFixture();
+  it("deploys below the runtime limit and blocks zero/stale/public bypass paths", async function () {
+    const { owner, ownerAddress, bootstrap, token, controller } = await deployFixture();
     assert.equal(await token.name(), "Synergy Coin");
     assert.equal(await token.symbol(), "SYNA");
     assert.notEqual(await bootstrap.pair(), ethers.ZeroAddress);
     assert.notEqual(await provider.getCode(await bootstrap.pair()), "0x");
     assert.equal((await controller.owner()).toLowerCase(), (await bootstrap.getAddress()).toLowerCase());
+    assert((await provider.getCode(await bootstrap.getAddress())).length / 2 - 1 <= 24_576);
+    assert((await token.balanceOf(ownerAddress)) > 0n, "free float not delivered to admin");
 
     const block0 = await provider.getBlock("latest");
     await expectRevert(
@@ -127,7 +145,7 @@ describe("Synergy Coin Shielded V5", function () {
     );
   });
 
-  it("remains positive after complete atomic V5 setup and ten protected cycles", async function () {
+  it("remains positive after complete constructor V5 setup and ten protected cycles", async function () {
     const { bootstrap, controller, setupGas } = await deployFixture();
     const initialMetric = await controller.systemMetricUsdt();
     const initialPrice = await controller.spotPriceX18();
@@ -157,7 +175,10 @@ describe("Synergy Coin Shielded V5", function () {
       verdict: net > 0 ? "PASS_POSITIVE_SHIELDED_FIRST10" : "STOP_NON_POSITIVE_SHIELDED_FIRST10"
     };
     fs.mkdirSync(path.join(process.cwd(), "reports", "shielded-v5"), { recursive: true });
-    fs.writeFileSync(path.join(process.cwd(), "reports", "shielded-v5", "first10.json"), JSON.stringify(report, null, 2));
+    fs.writeFileSync(
+      path.join(process.cwd(), "reports", "shielded-v5", "first10.json"),
+      JSON.stringify(report, null, 2)
+    );
     console.log("SHIELDED_V5_FIRST10", JSON.stringify(report));
     assert(finalPrice > initialPrice, "price did not rise");
     assert(net > 0, `shielded V5 net is non-positive: ${net}`);
@@ -183,6 +204,7 @@ describe("Synergy Coin Shielded V5", function () {
     const required = await controller.checkedQuoteIn(USDT, WPOL, exactPol);
     const maxUsdt = required * 10100n / 10000n + 1n;
     const block1 = await provider.getBlock("latest");
+    const beforePol = await provider.getBalance(await bootstrap.getAddress());
     await (await bootstrap.refillKeeperGasProtected(
       exactPol,
       maxUsdt,
@@ -193,5 +215,6 @@ describe("Synergy Coin Shielded V5", function () {
       { gasLimit: 3_000_000n }
     )).wait();
     assert((await controller.cumulativeGasRefillUsdt()) > 0n);
+    assert((await provider.getBalance(await bootstrap.getAddress())) > beforePol);
   });
 });
