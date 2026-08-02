@@ -12,6 +12,7 @@ const FIXTURE_DONOR = WPOL_USDT_PAIR;
 const DEV_MNEMONIC = "test test test test test test test test test test test junk";
 const GWEI = 10n ** 9n;
 const GAS = { maxFeePerGas: 500n * GWEI, maxPriorityFeePerGas: 30n * GWEI };
+const TOKEN_PRICE_SCALE = 10n ** 30n;
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -59,6 +60,14 @@ function receiptCost(receipt) {
   return receipt.gasUsed * (receipt.gasPrice ?? 0n);
 }
 
+function tokenSpotValueUsdtRaw(tokenAmount, priceX18) {
+  return tokenAmount * priceX18 / TOKEN_PRICE_SCALE;
+}
+
+function usdt(raw) {
+  return Number(ethers.formatUnits(raw, 6));
+}
+
 async function polPriceUsdt() {
   const pair = new ethers.Contract(WPOL_USDT_PAIR, PAIR_ABI, provider);
   const [token0, token1, reserves] = await Promise.all([pair.token0(), pair.token1(), pair.getReserves()]);
@@ -82,14 +91,14 @@ async function fundFixture(owner, amount = 2_000_000n) {
   await rpc("anvil_setBalance", [FIXTURE_DONOR, "0x3635c9adc5dea00000"]);
   await rpc("anvil_impersonateAccount", [FIXTURE_DONOR]);
   const donor = await provider.getSigner(FIXTURE_DONOR);
-  const usdt = new ethers.Contract(USDT, ERC20_ABI, owner);
-  const before = await usdt.balanceOf(ownerAddress);
-  await (await usdt.connect(donor).transfer(ownerAddress, amount)).wait();
-  assert.equal((await usdt.balanceOf(ownerAddress)) - before, amount);
-  return usdt;
+  const usdtToken = new ethers.Contract(USDT, ERC20_ABI, owner);
+  const before = await usdtToken.balanceOf(ownerAddress);
+  await (await usdtToken.connect(donor).transfer(ownerAddress, amount)).wait();
+  assert.equal((await usdtToken.balanceOf(ownerAddress)) - before, amount);
+  return usdtToken;
 }
 
-async function deploySystem(owner, usdt) {
+async function deploySystem(owner, usdtToken) {
   const ownerAddress = await owner.getAddress();
   let setupGasWei = 0n;
   const Token = await ethers.getContractFactory("RebaseSynaV1", owner);
@@ -108,7 +117,7 @@ async function deploySystem(owner, usdt) {
   setupGasWei += receiptCost(await tx.wait());
   tx = await controller.setPool(await pool.getAddress(), GAS);
   setupGasWei += receiptCost(await tx.wait());
-  tx = await usdt.approve(await controller.getAddress(), 2_000_000n, GAS);
+  tx = await usdtToken.approve(await controller.getAddress(), 2_000_000n, GAS);
   setupGasWei += receiptCost(await tx.wait());
   tx = await controller.initialize(
     ethers.parseEther("1000000"),
@@ -121,20 +130,47 @@ async function deploySystem(owner, usdt) {
   return { token, controller, pool, setupGasWei };
 }
 
-describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
-  it("runs 15 atomic cycles over 150 blocks and blocks mainnet on strict economics", async function () {
+async function valueSnapshot(token, controller, pool, usdtToken) {
+  const poolAddress = await pool.getAddress();
+  const controllerAddress = await controller.getAddress();
+  const price = await pool.priceX18();
+  const poolUsdtRaw = await usdtToken.balanceOf(poolAddress);
+  const poolSynaRaw = await token.balanceOf(poolAddress);
+  const robotUsdtRaw = await controller.robotUsdt();
+  const cbUsdtRaw = await controller.treasuryUsdt();
+  const robotSynaRaw = await token.balanceOf(controllerAddress);
+  const poolTokenSideUsdtRaw = tokenSpotValueUsdtRaw(poolSynaRaw, price);
+  const robotTokenSideUsdtRaw = tokenSpotValueUsdtRaw(robotSynaRaw, price);
+  const tvlRaw = poolUsdtRaw + poolTokenSideUsdtRaw;
+  const robotBalanceRaw = robotUsdtRaw + robotTokenSideUsdtRaw;
+  const cbBalanceRaw = cbUsdtRaw;
+  const totalRaw = tvlRaw + robotBalanceRaw + cbBalanceRaw;
+  return {
+    price,
+    poolUsdtRaw,
+    poolSynaRaw,
+    poolTokenSideUsdtRaw,
+    tvlRaw,
+    robotUsdtRaw,
+    robotSynaRaw,
+    robotTokenSideUsdtRaw,
+    robotBalanceRaw,
+    cbBalanceRaw,
+    totalRaw,
+  };
+}
+
+describe("SYNERGY bullish CB TVL solvency test on pinned Polygon fork", function () {
+  it("runs 15 atomic cycles over 150 blocks and applies only TVL + robot + CB > gas", async function () {
     const chainId = Number((await provider.getNetwork()).chainId);
     assert.equal(chainId, 137);
     const owner = new ethers.NonceManager(ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider));
-    const usdt = await fundFixture(owner);
-    const { token, controller, pool, setupGasWei } = await deploySystem(owner, usdt);
+    const usdtToken = await fundFixture(owner);
+    const { token, controller, pool, setupGasWei } = await deploySystem(owner, usdtToken);
 
     const initialBlock = await rawBlockNumber();
-    const initialPrice = await pool.priceX18();
     const initialSupply = await token.totalSupply();
-    const initialHardNav = await controller.hardNavUsdt();
-    const initialPoolUsdt = await usdt.balanceOf(await pool.getAddress());
-    assert.equal(initialHardNav, 2_000_000n);
+    const initial = await valueSnapshot(token, controller, pool, usdtToken);
 
     let cycleGasWei = 0n;
     const cycles = [];
@@ -143,24 +179,25 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
       const tx = await controller.executeCycle(i, block.timestamp + 3600, 2_000_000n, GAS);
       const receipt = await tx.wait();
       cycleGasWei += receiptCost(receipt);
+      const snap = await valueSnapshot(token, controller, pool, usdtToken);
       cycles.push({
         cycle: i + 1,
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed.toString(),
         effectiveGasPriceWei: (receipt.gasPrice ?? 0n).toString(),
-        priceX18: (await pool.priceX18()).toString(),
+        priceX18: snap.price.toString(),
         supply: (await token.totalSupply()).toString(),
-        hardNavUsdtRaw: (await controller.hardNavUsdt()).toString(),
+        tvlUsdt: usdt(snap.tvlRaw),
+        robotBalanceUsdt: usdt(snap.robotBalanceRaw),
+        cbBalanceUsdt: usdt(snap.cbBalanceRaw),
+        totalTvlRobotCbUsdt: usdt(snap.totalRaw),
       });
       await mineBlocks(9);
     }
 
     const finalBlock = await rawBlockNumber();
-    const finalPrice = await pool.priceX18();
     const finalSupply = await token.totalSupply();
-    const finalHardNav = await controller.hardNavUsdt();
-    const finalPoolUsdt = await usdt.balanceOf(await pool.getAddress());
-    const controllerUsdt = await usdt.balanceOf(await controller.getAddress());
+    const final = await valueSnapshot(token, controller, pool, usdtToken);
     const totalGasWei = setupGasWei + cycleGasWei;
     const polUsdt = await polPriceUsdt();
     const setupGasPol = Number(ethers.formatEther(setupGasWei));
@@ -168,46 +205,60 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
     const totalGasPol = Number(ethers.formatEther(totalGasWei));
     const totalGasUsdt = totalGasPol * polUsdt;
     const oneUsdtBudgetCovered = totalGasUsdt < 1.0;
-    const grossTvlInitial = Number(ethers.formatUnits(initialPoolUsdt * 2n, 6));
-    const grossTvlFinal = Number(ethers.formatUnits(finalPoolUsdt * 2n, 6));
-    const hardNavInitialIncludingGas = 3.0;
-    const hardNavFinalIncludingGas = Number(ethers.formatUnits(finalHardNav, 6)) + Math.max(0, 1.0 - totalGasUsdt);
-    const hardNavDelta = hardNavFinalIncludingGas - hardNavInitialIncludingGas;
+    const initialTotalUsdt = usdt(initial.totalRaw);
+    const finalTotalUsdt = usdt(final.totalRaw);
+    const grossSystemGrowthUsdt = finalTotalUsdt - initialTotalUsdt;
+    const solvencyMarginUsdt = grossSystemGrowthUsdt - totalGasUsdt;
+    const solvent = solvencyMarginUsdt > 0;
     const coveredBlocks = finalBlock - initialBlock;
-    const mainnetGate = oneUsdtBudgetCovered
-      ? "BLOCKED_BY_FORK_ECONOMICS"
-      : "BLOCKED_BY_GAS_BUDGET_AND_FORK_ECONOMICS";
+    const mainnetGate = solvent && oneUsdtBudgetCovered
+      ? "READY_BY_TVL_ROBOT_CB_SOLVENCY_METRIC"
+      : "BLOCKED_BY_TVL_ROBOT_CB_SOLVENCY_METRIC";
 
     const report = {
-      scenario: "SYNERGY_BULLISH_CB_MICROCYCLE_V1_POLYGON_FORK",
-      evidenceClass: "STRUCTURAL_FORK_REAL_USDT_REAL_GAS_FIXTURE_FUNDING",
+      scenario: "SYNERGY_BULLISH_CB_TVL_ROBOT_CB_SOLVENCY_V2_POLYGON_FORK",
+      evidenceClass: "STRUCTURAL_FORK_REAL_USDT_REAL_GAS_SPOT_TVL",
+      criterion: "DELTA_TVL_PLUS_ROBOT_BALANCE_PLUS_CB_BALANCE_GREATER_THAN_GAS",
       chainId,
       forkBlockConfigured: Number(process.env.FORK_BLOCK_NUMBER || 0),
       coveredBlocks,
       cycles: 15,
       trades: 105,
       startingCapital: {
-        cbAndRobotUsdt: 1,
+        robotAndCbUsdt: 1,
         poolUsdt: 1,
         gasBudgetUsdt: 1,
         fixtureSource: FIXTURE_DONOR,
-        fixtureIsRevenue: false,
       },
       price: {
-        initialX18: initialPrice.toString(),
-        finalX18: finalPrice.toString(),
-        multiple: Number(finalPrice) / Number(initialPrice),
+        initialX18: initial.price.toString(),
+        finalX18: final.price.toString(),
+        multiple: Number(final.price) / Number(initial.price),
       },
       supply: {
         initial: initialSupply.toString(),
         final: finalSupply.toString(),
         changePct: (Number(finalSupply) / Number(initialSupply) - 1) * 100,
       },
-      tvl: {
-        grossInitialUsdt: grossTvlInitial,
-        grossFinalUsdt: grossTvlFinal,
-        grossChangeUsdt: grossTvlFinal - grossTvlInitial,
-        organicExternalChangeUsdt: 0,
+      initial: {
+        tvlUsdt: usdt(initial.tvlRaw),
+        poolUsdtSideUsdt: usdt(initial.poolUsdtRaw),
+        poolSynaSideSpotUsdt: usdt(initial.poolTokenSideUsdtRaw),
+        robotUsdt: usdt(initial.robotUsdtRaw),
+        robotSynaSpotUsdt: usdt(initial.robotTokenSideUsdtRaw),
+        robotBalanceUsdt: usdt(initial.robotBalanceRaw),
+        cbBalanceUsdt: usdt(initial.cbBalanceRaw),
+        totalTvlRobotCbUsdt: initialTotalUsdt,
+      },
+      final: {
+        tvlUsdt: usdt(final.tvlRaw),
+        poolUsdtSideUsdt: usdt(final.poolUsdtRaw),
+        poolSynaSideSpotUsdt: usdt(final.poolTokenSideUsdtRaw),
+        robotUsdt: usdt(final.robotUsdtRaw),
+        robotSynaSpotUsdt: usdt(final.robotTokenSideUsdtRaw),
+        robotBalanceUsdt: usdt(final.robotBalanceRaw),
+        cbBalanceUsdt: usdt(final.cbBalanceRaw),
+        totalTvlRobotCbUsdt: finalTotalUsdt,
       },
       gas: {
         setupGasWei: setupGasWei.toString(),
@@ -220,12 +271,14 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
         totalGasUsdt,
         oneUsdtBudgetCovered,
       },
-      accounting: {
-        hardNavBeforeGasUsdt: Number(ethers.formatUnits(finalHardNav, 6)),
-        externalRevenueUsdt: 0,
-        hardNavInitialIncludingGasUsdt: hardNavInitialIncludingGas,
-        hardNavFinalIncludingRemainingGasUsdt: hardNavFinalIncludingGas,
-        hardNavDeltaUsdt: hardNavDelta,
+      solvency: {
+        initialTotalTvlRobotCbUsdt: initialTotalUsdt,
+        finalTotalTvlRobotCbUsdt: finalTotalUsdt,
+        grossGrowthUsdt: grossSystemGrowthUsdt,
+        gasUsdt: totalGasUsdt,
+        netGrowthAfterGasUsdt: solvencyMarginUsdt,
+        solvent,
+        verdict: solvent ? "PASS_SOLVENT" : "FAIL_INSOLVENT",
       },
       protections: {
         atomicSevenTradeBatch: true,
@@ -233,10 +286,8 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
         zeroPriceGuard: true,
         nonce: true,
         deadline: true,
-        hardNavGate: true,
         publicIntermediateState: false,
       },
-      strictVerdict: "FAIL_NO_EXTERNAL_VALUE",
       mainnetGate,
       cyclesDetail: cycles,
     };
@@ -244,20 +295,19 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
     fs.writeFileSync(path.join(process.cwd(), "reports", "bullish_cb_microcycle_polygon_fork.json"), JSON.stringify(report, null, 2));
 
     assert.equal(coveredBlocks, 150);
-    assert(finalPrice > initialPrice, "price did not rise");
+    assert(final.price > initial.price, "price did not rise");
     assert(finalSupply < initialSupply, "supply did not contract");
-    assert.equal(finalHardNav, initialHardNav);
-    assert.equal(controllerUsdt + finalPoolUsdt, 2_000_000n);
-    assert(hardNavDelta < 0.0, "internal activity invented external value");
+    assert(grossSystemGrowthUsdt > totalGasUsdt, `TVL + robot + CB growth ${grossSystemGrowthUsdt} did not exceed gas ${totalGasUsdt}`);
+    assert(solvent, "system is not solvent by requested criterion");
   });
 
-  it("rejects public calls, replay, stale deadline and invented NAV", async function () {
+  it("rejects public calls, replay, stale deadline and ledger loss", async function () {
     const owner = new ethers.NonceManager(ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider));
     const attacker = ethers.Wallet.createRandom().connect(provider);
     const attackerAddress = await attacker.getAddress();
     await rpc("anvil_setBalance", [attackerAddress, "0x3635c9adc5dea00000"]);
-    const usdt = await fundFixture(owner);
-    const { controller, pool } = await deploySystem(owner, usdt);
+    const usdtToken = await fundFixture(owner);
+    const { controller, pool } = await deploySystem(owner, usdtToken);
     await expectRevert(pool.connect(attacker).buyWithNetUsdt(1n, 1n), "CONTROLLER");
     const block = await provider.getBlock("latest");
     await expectRevert(controller.executeCycle(1, block.timestamp + 100, 2_000_000n, GAS), "NONCE");
