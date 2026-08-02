@@ -1,0 +1,104 @@
+name: Synergy Shielded V5 Fork
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_v2_ci/contracts/BullishQuickSwapShieldedV5.sol"
+      - "bullish_cb_v2_ci/contracts/SynergyQuickSwapBootstrapV5.sol"
+      - "bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol"
+      - "bullish_cb_v2_ci/test/synergy_shielded_v5_polygon_fork.js"
+      - ".github/workflows/synergy_shielded_v5_fork.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shielded-v5:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      LOCAL_FORK_URL: http://127.0.0.1:8545
+      FORK_BLOCK_NUMBER: "90790000"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Compile exact V5 source
+        run: |
+          npm install --no-audit --no-fund
+          rm -f contracts/BullishQuickSwapDirectV4.sol
+          rm -rf artifacts cache
+          mkdir -p reports/shielded-v5
+          node --check test/synergy_shielded_v5_polygon_fork.js
+          npx hardhat compile --force 2>&1 | tee reports/shielded-v5/compile.log
+      - name: Start pinned Polygon fork
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/shielded-v5/anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then exit 0; fi
+            sleep 1
+          done
+          cat reports/shielded-v5/anvil.log
+          exit 1
+      - name: Execute protected fork suite
+        run: |
+          npx hardhat test test/synergy_shielded_v5_polygon_fork.js --network polygon \
+            2>&1 | tee reports/shielded-v5/fork.log
+      - name: Validate economic result
+        run: |
+          python - <<'PY' | tee reports/shielded-v5/validator.log
+          import json
+          from pathlib import Path
+          r = json.loads(Path("reports/shielded-v5/first10.json").read_text())
+          assert r["chainId"] == 137
+          assert r["forkBlock"] == 90790000
+          assert r["tokenName"] == "Synergy Coin"
+          assert r["tokenSymbol"] == "SYNA"
+          assert r["cycles"] == 10
+          assert r["trades"] == 70
+          assert r["netGrowthAfterGasUsdt"] > 0
+          assert r["verdict"] == "PASS_POSITIVE_SHIELDED_FIRST10"
+          print(json.dumps(r, indent=2))
+          PY
+      - name: Bind evidence
+        run: |
+          sha256sum \
+            contracts/RebaseSynaExactV3.sol \
+            contracts/BullishQuickSwapShieldedV5.sol \
+            contracts/SynergyQuickSwapBootstrapV5.sol \
+            test/synergy_shielded_v5_polygon_fork.js \
+            reports/shielded-v5/first10.json \
+            reports/shielded-v5/compile.log \
+            reports/shielded-v5/fork.log \
+            reports/shielded-v5/validator.log \
+            > reports/shielded-v5/sha256.txt
+          sha256sum -c reports/shielded-v5/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synergy-shielded-v5-fork
+          path: bullish_cb_v2_ci/reports/shielded-v5
+          if-no-files-found: error
