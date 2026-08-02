@@ -67,7 +67,7 @@ jobs:
           done
           cat reports/anvil.log
           exit 1
-      - name: Execute first-ten and refill fork tests
+      - name: Execute first-ten and direct refill fork tests
         run: |
           set -euo pipefail
           npm run test:fork 2>&1 | tee reports/fork.log
@@ -85,8 +85,11 @@ jobs:
           assert first['trades'] == 70
           assert first['netGrowthAfterGasUsdt'] > 0
           assert first['verdict'] == 'PASS_POSITIVE_FIRST_10'
-          assert refill['cycles'] == 160
+          assert refill['cycles'] == 1
           assert refill['robotRefillEvents'] > 0
+          assert refill['gasRefillEvents'] == 1
+          assert refill['gasRefillSpentUsdt'] > 0
+          assert refill['verdict'] == 'PASS_BOUNDED_ROBOT_AND_GAS_REFILL'
           summary = {'first10': first, 'refill': refill}
           Path('reports/verdict.json').write_text(json.dumps(summary, indent=2))
           print(json.dumps(summary, indent=2))
