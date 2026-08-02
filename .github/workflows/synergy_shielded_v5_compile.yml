@@ -7,6 +7,7 @@ on:
       - "bullish_cb_v2_ci/contracts/BullishQuickSwapShieldedV5.sol"
       - "bullish_cb_v2_ci/contracts/SynergyQuickSwapBootstrapV5.sol"
       - "bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol"
+      - "bullish_cb_v2_ci/tools/synergy_local_signer.mjs"
       - ".github/workflows/synergy_shielded_v5_compile.yml"
   workflow_dispatch:
 
@@ -16,10 +17,17 @@ permissions:
 jobs:
   compile:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      DEPLOYER: 0x6946999DBCE63b140B1bB9D475F7c357130909E5
+      ROUTER: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+      FACTORY: 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32
+      USDT: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F
+      WPOL: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,9 +36,83 @@ jobs:
         with:
           node-version: "22"
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save esbuild
       - name: Compile all V5 sources
         run: |
+          set -euo pipefail
           rm -f contracts/BullishQuickSwapDirectV4.sol
-          rm -rf artifacts cache
+          rm -rf artifacts cache bundle
           npx hardhat compile --force
+          mkdir -p bundle
+          cp artifacts/contracts/SynergyQuickSwapBootstrapV5.sol/SynergyQuickSwapBootstrapV5.json bundle/
+      - name: Query live Polygon mainnet
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { Contract, JsonRpcProvider, getAddress } from 'ethers';
+          const provider = new JsonRpcProvider(process.env.POLYGON_RPC_URL, 137, { staticNetwork: true });
+          const deployer = getAddress(process.env.DEPLOYER);
+          const routerAddress = getAddress(process.env.ROUTER);
+          const factoryAddress = getAddress(process.env.FACTORY);
+          const usdtAddress = getAddress(process.env.USDT);
+          const wpolAddress = getAddress(process.env.WPOL);
+          const network = await provider.getNetwork();
+          const block = await provider.getBlock('latest');
+          const [nonceLatest, noncePending, polBalance, feeData] = await Promise.all([
+            provider.getTransactionCount(deployer, 'latest'),
+            provider.getTransactionCount(deployer, 'pending'),
+            provider.getBalance(deployer),
+            provider.getFeeData(),
+          ]);
+          const usdt = new Contract(usdtAddress, ['function balanceOf(address) view returns(uint256)'], provider);
+          const router = new Contract(routerAddress, ['function factory() view returns(address)', 'function WETH() view returns(address)'], provider);
+          const [usdtBalance, routerFactory, routerWeth, routerCode, factoryCode, usdtCode, wpolCode] = await Promise.all([
+            usdt.balanceOf(deployer), router.factory(), router.WETH(),
+            provider.getCode(routerAddress), provider.getCode(factoryAddress), provider.getCode(usdtAddress), provider.getCode(wpolAddress),
+          ]);
+          const gasPrice = feeData.gasPrice ?? feeData.maxFeePerGas;
+          if (!block || !gasPrice) throw new Error('Missing live block or gas price');
+          const result = {
+            chainId: Number(network.chainId),
+            blockNumber: block.number,
+            blockTimestamp: block.timestamp,
+            blockGasLimit: block.gasLimit.toString(),
+            baseFeePerGasWei: (block.baseFeePerGas ?? 0n).toString(),
+            gasPriceWei: gasPrice.toString(),
+            deployer,
+            nonceLatest: nonceLatest.toString(),
+            noncePending: noncePending.toString(),
+            polBalanceWei: polBalance.toString(),
+            usdt: usdtAddress,
+            usdtBalanceRaw: usdtBalance.toString(),
+            router: routerAddress,
+            factory: factoryAddress,
+            wpol: wpolAddress,
+            routerFactory: getAddress(routerFactory),
+            routerWeth: getAddress(routerWeth),
+            routerCodeBytes: (routerCode.length - 2) / 2,
+            factoryCodeBytes: (factoryCode.length - 2) / 2,
+            usdtCodeBytes: (usdtCode.length - 2) / 2,
+            wpolCodeBytes: (wpolCode.length - 2) / 2,
+          };
+          if (result.chainId !== 137) throw new Error('Wrong chain');
+          if (result.routerFactory !== factoryAddress || result.routerWeth !== wpolAddress) throw new Error('QuickSwap binding mismatch');
+          if (Math.min(result.routerCodeBytes, result.factoryCodeBytes, result.usdtCodeBytes, result.wpolCodeBytes) <= 0) throw new Error('Missing contract code');
+          fs.writeFileSync('bundle/preflight.json', JSON.stringify(result, null, 2) + '\n');
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+      - name: Bundle offline local signer
+        run: |
+          set -euo pipefail
+          npx esbuild tools/synergy_local_signer.mjs --bundle --platform=node --format=cjs --outfile=bundle/synergy_local_signer.cjs
+          sha256sum bundle/* > bundle/SHA256SUMS
+      - name: Upload local deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v5-local-deploy-bundle
+          path: bullish_cb_v2_ci/bundle
+          if-no-files-found: error
+          compression-level: 6
