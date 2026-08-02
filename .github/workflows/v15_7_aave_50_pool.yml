@@ -6,7 +6,9 @@ on:
     paths:
       - "v8_graph_ci/contracts/v15_7/**"
       - "v8_graph_ci/test/v15_7_aave_50_pool_qe_qt_polygon_fork.js"
+      - "v8_graph_ci/scripts/build_v15_7_50_pool_manifest.js"
       - "v8_graph_ci/scripts/patch_v15_7_token_addresses.py"
+      - "v8_graph_ci/scripts/patch_v15_7_manifest_test.py"
       - "v8_graph_ci/scripts/validate_v15_7.py"
       - ".github/workflows/v15_7_aave_50_pool.yml"
   workflow_dispatch:
@@ -26,7 +28,7 @@ jobs:
       run:
         working-directory: v8_graph_ci
     env:
-      POLYGON_RPC_URL: "https://polygon-bor-rpc.publicnode.com"
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
       LOCAL_FORK_URL: "http://127.0.0.1:8545"
       FORK_BLOCK_NUMBER: "90790000"
 
@@ -55,9 +57,19 @@ jobs:
           npm install --no-audit --no-fund
           mkdir -p reports
           python scripts/patch_v15_7_token_addresses.py
+          python scripts/patch_v15_7_manifest_test.py
+          node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v15_7_aave_50_pool_qe_qt_polygon_fork.js
-          python -m py_compile scripts/patch_v15_7_token_addresses.py scripts/validate_v15_7.py
+          python -m py_compile scripts/patch_v15_7_token_addresses.py scripts/patch_v15_7_manifest_test.py scripts/validate_v15_7.py
           npx hardhat compile --force 2>&1 | tee reports/v15_7_compile.log
+
+      - name: Build historical 50-pool graph with Multicall3
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build_v15_7_50_pool_manifest.js \
+            2>&1 | tee reports/v15_7_50_pool_manifest.log
+          test -s reports/v15_7_50_pool_manifest.json
 
       - name: Start pinned Polygon archive fork
         shell: bash
