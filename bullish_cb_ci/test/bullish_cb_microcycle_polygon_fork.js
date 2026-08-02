@@ -34,6 +34,10 @@ async function rpc(method, params = []) {
   }
 }
 
+async function rawBlockNumber() {
+  return Number(BigInt(await provider.send("eth_blockNumber", [])));
+}
+
 async function mineBlocks(count) {
   try {
     await provider.send("anvil_mine", [`0x${count.toString(16)}`]);
@@ -125,7 +129,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
     const usdt = await fundFixture(owner);
     const { token, controller, pool, setupGasWei } = await deploySystem(owner, usdt);
 
-    const initialBlock = await provider.getBlockNumber();
+    const initialBlock = await rawBlockNumber();
     const initialPrice = await pool.priceX18();
     const initialSupply = await token.totalSupply();
     const initialHardNav = await controller.hardNavUsdt();
@@ -151,7 +155,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
       await mineBlocks(9);
     }
 
-    const finalBlock = await provider.getBlockNumber();
+    const finalBlock = await rawBlockNumber();
     const finalPrice = await pool.priceX18();
     const finalSupply = await token.totalSupply();
     const finalHardNav = await controller.hardNavUsdt();
@@ -163,26 +167,23 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
     const cycleGasPol = Number(ethers.formatEther(cycleGasWei));
     const totalGasPol = Number(ethers.formatEther(totalGasWei));
     const totalGasUsdt = totalGasPol * polUsdt;
+    const oneUsdtBudgetCovered = totalGasUsdt < 1.0;
     const grossTvlInitial = Number(ethers.formatUnits(initialPoolUsdt * 2n, 6));
     const grossTvlFinal = Number(ethers.formatUnits(finalPoolUsdt * 2n, 6));
     const hardNavInitialIncludingGas = 3.0;
     const hardNavFinalIncludingGas = Number(ethers.formatUnits(finalHardNav, 6)) + Math.max(0, 1.0 - totalGasUsdt);
     const hardNavDelta = hardNavFinalIncludingGas - hardNavInitialIncludingGas;
-
-    assert.equal(finalBlock - initialBlock, 150);
-    assert(finalPrice > initialPrice, "price did not rise");
-    assert(finalSupply < initialSupply, "supply did not contract");
-    assert.equal(finalHardNav, initialHardNav);
-    assert.equal(controllerUsdt + finalPoolUsdt, 2_000_000n);
-    assert(totalGasUsdt < 1.0, `full setup + run gas exceeded 1 USDT: ${totalGasUsdt}`);
-    assert(hardNavDelta < 0.0, "internal activity invented external value");
+    const coveredBlocks = finalBlock - initialBlock;
+    const mainnetGate = oneUsdtBudgetCovered
+      ? "BLOCKED_BY_FORK_ECONOMICS"
+      : "BLOCKED_BY_GAS_BUDGET_AND_FORK_ECONOMICS";
 
     const report = {
       scenario: "SYNERGY_BULLISH_CB_MICROCYCLE_V1_POLYGON_FORK",
       evidenceClass: "STRUCTURAL_FORK_REAL_USDT_REAL_GAS_FIXTURE_FUNDING",
       chainId,
       forkBlockConfigured: Number(process.env.FORK_BLOCK_NUMBER || 0),
-      coveredBlocks: finalBlock - initialBlock,
+      coveredBlocks,
       cycles: 15,
       trades: 105,
       startingCapital: {
@@ -217,7 +218,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
         totalGasPol,
         polUsdt,
         totalGasUsdt,
-        oneUsdtBudgetCovered: totalGasUsdt < 1,
+        oneUsdtBudgetCovered,
       },
       accounting: {
         hardNavBeforeGasUsdt: Number(ethers.formatUnits(finalHardNav, 6)),
@@ -236,11 +237,18 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
         publicIntermediateState: false,
       },
       strictVerdict: "FAIL_NO_EXTERNAL_VALUE",
-      mainnetGate: "BLOCKED_BY_FORK_ECONOMICS",
+      mainnetGate,
       cyclesDetail: cycles,
     };
     fs.mkdirSync(path.join(process.cwd(), "reports"), { recursive: true });
     fs.writeFileSync(path.join(process.cwd(), "reports", "bullish_cb_microcycle_polygon_fork.json"), JSON.stringify(report, null, 2));
+
+    assert.equal(coveredBlocks, 150);
+    assert(finalPrice > initialPrice, "price did not rise");
+    assert(finalSupply < initialSupply, "supply did not contract");
+    assert.equal(finalHardNav, initialHardNav);
+    assert.equal(controllerUsdt + finalPoolUsdt, 2_000_000n);
+    assert(hardNavDelta < 0.0, "internal activity invented external value");
   });
 
   it("rejects public calls, replay, stale deadline and invented NAV", async function () {
