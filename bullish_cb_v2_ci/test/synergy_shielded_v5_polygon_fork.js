@@ -23,6 +23,16 @@ const PAIR = [
 async function rpc(method, params = []) { return provider.send(method, params); }
 function cost(receipt) { return receipt.gasUsed * (receipt.gasPrice || 0n); }
 
+async function freshLatestBlock() {
+  const raw = await rpc("eth_getBlockByNumber", ["latest", false]);
+  assert(raw && raw.hash && raw.timestamp, "fresh latest block unavailable");
+  return {
+    hash: raw.hash,
+    timestamp: Number(BigInt(raw.timestamp)),
+    number: Number(BigInt(raw.number))
+  };
+}
+
 async function fundUsdt(target, amount) {
   await rpc("anvil_setBalance", [target, "0x152d02c7e14af6800000"]);
   await rpc("anvil_setBalance", [WPOL_USDT_PAIR, "0x3635c9adc5dea00000"]);
@@ -73,10 +83,12 @@ async function deployFixture() {
 }
 
 async function executeProtected(bootstrap, controller, minMetric = 0n) {
-  const block = await provider.getBlock("latest");
+  const stateHash = await controller.currentExecutionStateHash();
+  const nonce = await controller.nonce();
+  const block = await freshLatestBlock();
   return (await bootstrap.executeProtectedCycle(
-    await controller.nonce(),
-    await controller.currentExecutionStateHash(),
+    nonce,
+    stateHash,
     block.hash,
     block.timestamp + 60,
     ethers.parseUnits("500", "gwei"),
@@ -121,14 +133,14 @@ describe("Synergy Coin Shielded V5", function () {
     assert((await provider.getCode(await bootstrap.getAddress())).length / 2 - 1 <= 24_576);
     assert((await token.balanceOf(ownerAddress)) > 0n, "free float not delivered to admin");
 
-    const block0 = await provider.getBlock("latest");
+    const block0 = await freshLatestBlock();
     await expectRevert(controller.connect(owner).executeCycle(0, block0.timestamp + 60, 0), "OPERATOR");
     await expectRevert(controller.checkedQuoteOut(await token.getAddress(), USDT, 1n), "ZERO_LOCAL_PRICE");
 
     const staleState = await controller.currentExecutionStateHash();
     const staleParent = block0.hash;
     await executeProtected(bootstrap, controller);
-    const block1 = await provider.getBlock("latest");
+    const block1 = await freshLatestBlock();
     await expectRevert(
       bootstrap.executeProtectedCycle(
         await controller.nonce(), staleState, block1.hash, block1.timestamp + 60,
@@ -185,11 +197,12 @@ describe("Synergy Coin Shielded V5", function () {
   it("passes protected robot refill and exact POL refill", async function () {
     const { bootstrap, controller } = fixture;
     await (await bootstrap.setRefillConfig(1_040_000n, 0, 100, 500, 10)).wait();
-    const block0 = await provider.getBlock("latest");
+    const stateHash = await controller.currentExecutionStateHash();
+    const block0 = await freshLatestBlock();
     const before = await controller.robotUsdt();
     await (await bootstrap.refillRobotCapitalProtected(
       1_040_000n,
-      await controller.currentExecutionStateHash(),
+      stateHash,
       block0.hash,
       block0.timestamp + 60,
       ethers.parseUnits("500", "gwei"),
@@ -201,12 +214,13 @@ describe("Synergy Coin Shielded V5", function () {
     const exactPol = ethers.parseEther("0.001");
     const required = await controller.checkedQuoteIn(USDT, WPOL, exactPol);
     const maxUsdt = required * 10100n / 10000n + 1n;
-    const block1 = await provider.getBlock("latest");
+    const routeState = await controller.currentGasRouteStateHash();
+    const block1 = await freshLatestBlock();
     const beforePol = await provider.getBalance(await bootstrap.getAddress());
     await (await bootstrap.refillKeeperGasProtected(
       exactPol,
       maxUsdt,
-      await controller.currentGasRouteStateHash(),
+      routeState,
       block1.hash,
       block1.timestamp + 60,
       ethers.parseUnits("500", "gwei"),
