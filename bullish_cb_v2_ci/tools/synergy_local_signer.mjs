@@ -1,3 +1,4 @@
+// Offline signer: the private key is read only from the local env file and is never uploaded.
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
