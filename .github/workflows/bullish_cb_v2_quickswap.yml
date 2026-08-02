@@ -47,13 +47,31 @@ jobs:
           from pathlib import Path
           p = Path('contracts/BullishQuickSwapDirectV4.sol')
           s = p.read_text()
-          s = s.replace('reference', 'referencePrice')
-          s = s.replace('error GasRefill();', 'error GasRefillError();')
-          s = s.replace('revert GasRefill();', 'revert GasRefillError();')
-          s = s.replace(
-              'IERC20V4(usdt_).approve(router_, type(uint256).max);',
-              'SafeTransferV4.approve(IERC20V4(usdt_), router_, type(uint256).max);'
-          )
+          replacements = {
+              'reference': 'referencePrice',
+              'error GasRefill();': 'error GasRefillError();',
+              'revert GasRefill();': 'revert GasRefillError();',
+              'IERC20V4(usdt_).approve(router_, type(uint256).max);':
+                  'SafeTransferV4.approve(IERC20V4(usdt_), router_, type(uint256).max);',
+              'usdt.transferFrom(owner, address(this), poolUsdt + workingUsdt);':
+                  'SafeTransferV4.transferFrom(usdt, owner, address(this), poolUsdt + workingUsdt);',
+              'IERC20V4(address(syna)).transfer(p, poolToken);':
+                  'SafeTransferV4.transfer(IERC20V4(address(syna)), p, poolToken);',
+              'usdt.transfer(p, poolUsdt);':
+                  'SafeTransferV4.transfer(usdt, p, poolUsdt);',
+              'usdt.transfer(address(pair), net);':
+                  'SafeTransferV4.transfer(usdt, address(pair), net);',
+              'IERC20V4(address(syna)).transfer(address(pair), tokenIn);':
+                  'SafeTransferV4.transfer(IERC20V4(address(syna)), address(pair), tokenIn);',
+              'IERC20V4(address(syna)).transfer(address(pair), addToken);':
+                  'SafeTransferV4.transfer(IERC20V4(address(syna)), address(pair), addToken);',
+              'usdt.transfer(address(pair), addUsdt);':
+                  'SafeTransferV4.transfer(usdt, address(pair), addUsdt);',
+              'IERC20V4(address(pair)).transfer(address(pair), liquidity);':
+                  'SafeTransferV4.transfer(IERC20V4(address(pair)), address(pair), liquidity);',
+          }
+          for old, new in replacements.items():
+              s = s.replace(old, new)
           p.write_text(s)
           PY
           node --check test/bullish_quickswap_direct_v4_polygon_fork.js
