@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "compile": "hardhat compile --force",
-    "test:fork": "hardhat test test/bullish_quickswap_refill_v2_polygon_fork.js --network polygon"
+    "test:fork": "hardhat test test/diagnose_bullish_quickswap_v2.js --network polygon"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "3.0.8",
