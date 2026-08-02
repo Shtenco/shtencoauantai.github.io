@@ -4,9 +4,9 @@ pragma solidity ^0.8.26;
 import {BullishQuickSwapCentralBankV2, IQuickSwapPairV2} from "./BullishQuickSwapRefillV2.sol";
 
 contract BullishQuickSwapShieldedV5 is BullishQuickSwapCentralBankV2 {
-    uint256 public constant SCALED_BUY_USDT = 175_000;
-    uint256 public constant SCALED_SELL_NOTIONAL_USDT = 70_000;
-    uint256 public constant DEAL_SCALE_BPS = 17_500;
+    uint256 public constant SCALED_BUY_USDT = 250_000;
+    uint256 public constant SCALED_SELL_NOTIONAL_USDT = 100_000;
+    uint256 public constant DEAL_SCALE_BPS = 25_000;
     uint256 public constant QUICKSWAP_FEE_NUMERATOR = 997;
     uint256 public constant QUICKSWAP_FEE_DENOMINATOR = 1_000;
     uint256 public constant MAX_SECURITY_BPS = 3_000;
@@ -28,6 +28,7 @@ contract BullishQuickSwapShieldedV5 is BullishQuickSwapCentralBankV2 {
     {
         require(gasRecipient_ != address(0), "ZERO_GAS_RECIPIENT");
         gasRecipient = gasRecipient_;
+        robotTargetUsdt = 600_000;
     }
 
     function setSecurityConfig(uint256 inputBps, uint256 outputBps, uint256 gasCeiling) external onlyOwner {
