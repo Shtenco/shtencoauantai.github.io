@@ -38,6 +38,7 @@ jobs:
           version: stable
       - name: Compile exact V5 source
         run: |
+          set -euo pipefail
           npm install --no-audit --no-fund
           rm -f contracts/BullishQuickSwapDirectV4.sol
           rm -rf artifacts cache
@@ -66,10 +67,12 @@ jobs:
           exit 1
       - name: Execute protected fork suite
         run: |
+          set -euo pipefail
           npx hardhat test test/synergy_shielded_v5_polygon_fork.js --network polygon \
             2>&1 | tee reports/shielded-v5/fork.log
       - name: Validate economic result
         run: |
+          set -euo pipefail
           python - <<'PY' | tee reports/shielded-v5/validator.log
           import json
           from pathlib import Path
@@ -86,6 +89,7 @@ jobs:
           PY
       - name: Bind evidence
         run: |
+          set -euo pipefail
           sha256sum \
             contracts/RebaseSynaExactV3.sol \
             contracts/BullishQuickSwapShieldedV5.sol \
