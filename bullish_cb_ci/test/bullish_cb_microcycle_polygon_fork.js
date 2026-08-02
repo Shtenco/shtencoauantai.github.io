@@ -1,8 +1,10 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const { ethers, network } = require("hardhat");
+const hre = require("hardhat");
+const { ethers } = hre;
 
+const provider = new ethers.JsonRpcProvider(process.env.LOCAL_FORK_URL || "http://127.0.0.1:8545");
 const USDT = "0xc2132d05d31c914a87c6611c10748aacba1b58e8f";
 const WPOL = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270";
 const WPOL_USDT_PAIR = "0x604229c960e5cacf2aaeac8be68ac07ba9df81c3";
@@ -24,19 +26,19 @@ const PAIR_ABI = [
 
 async function rpc(method, params = []) {
   try {
-    return await network.provider.send(method, params);
+    return await provider.send(method, params);
   } catch (first) {
     const fallback = method.startsWith("anvil_") ? method.replace("anvil_", "hardhat_") : method;
     if (fallback === method) throw first;
-    return network.provider.send(fallback, params);
+    return provider.send(fallback, params);
   }
 }
 
 async function mineBlocks(count) {
   try {
-    await network.provider.send("anvil_mine", [`0x${count.toString(16)}`]);
+    await provider.send("anvil_mine", [`0x${count.toString(16)}`]);
   } catch (_) {
-    await network.provider.send("hardhat_mine", [`0x${count.toString(16)}`]);
+    await provider.send("hardhat_mine", [`0x${count.toString(16)}`]);
   }
 }
 
@@ -54,7 +56,7 @@ function receiptCost(receipt) {
 }
 
 async function polPriceUsdt() {
-  const pair = new ethers.Contract(WPOL_USDT_PAIR, PAIR_ABI, ethers.provider);
+  const pair = new ethers.Contract(WPOL_USDT_PAIR, PAIR_ABI, provider);
   const [token0, token1, reserves] = await Promise.all([pair.token0(), pair.token1(), pair.getReserves()]);
   let usdtReserve;
   let wpolReserve;
@@ -75,7 +77,7 @@ async function fundFixture(owner, amount = 2_000_000n) {
   await rpc("anvil_setBalance", [ownerAddress, "0x152d02c7e14af6800000"]);
   await rpc("anvil_setBalance", [FIXTURE_DONOR, "0x3635c9adc5dea00000"]);
   await rpc("anvil_impersonateAccount", [FIXTURE_DONOR]);
-  const donor = await ethers.getImpersonatedSigner(FIXTURE_DONOR);
+  const donor = await provider.getSigner(FIXTURE_DONOR);
   const usdt = new ethers.Contract(USDT, ERC20_ABI, owner);
   const before = await usdt.balanceOf(ownerAddress);
   await (await usdt.connect(donor).transfer(ownerAddress, amount)).wait();
@@ -117,13 +119,13 @@ async function deploySystem(owner, usdt) {
 
 describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
   it("runs 15 atomic cycles over 150 blocks and blocks mainnet on strict economics", async function () {
-    const chainId = Number((await ethers.provider.getNetwork()).chainId);
+    const chainId = Number((await provider.getNetwork()).chainId);
     assert.equal(chainId, 137);
-    const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(ethers.provider);
+    const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider);
     const usdt = await fundFixture(owner);
     const { token, controller, pool, setupGasWei } = await deploySystem(owner, usdt);
 
-    const initialBlock = await ethers.provider.getBlockNumber();
+    const initialBlock = await provider.getBlockNumber();
     const initialPrice = await pool.priceX18();
     const initialSupply = await token.totalSupply();
     const initialHardNav = await controller.hardNavUsdt();
@@ -133,7 +135,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
     let cycleGasWei = 0n;
     const cycles = [];
     for (let i = 0; i < 15; i += 1) {
-      const block = await ethers.provider.getBlock("latest");
+      const block = await provider.getBlock("latest");
       const tx = await controller.executeCycle(i, block.timestamp + 3600, 2_000_000n, GAS);
       const receipt = await tx.wait();
       cycleGasWei += receiptCost(receipt);
@@ -149,7 +151,7 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
       await mineBlocks(9);
     }
 
-    const finalBlock = await ethers.provider.getBlockNumber();
+    const finalBlock = await provider.getBlockNumber();
     const finalPrice = await pool.priceX18();
     const finalSupply = await token.totalSupply();
     const finalHardNav = await controller.hardNavUsdt();
@@ -242,14 +244,14 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
   });
 
   it("rejects public calls, replay, stale deadline and invented NAV", async function () {
-    const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(ethers.provider);
-    const attacker = ethers.Wallet.createRandom().connect(ethers.provider);
+    const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(provider);
+    const attacker = ethers.Wallet.createRandom().connect(provider);
     const attackerAddress = await attacker.getAddress();
     await rpc("anvil_setBalance", [attackerAddress, "0x3635c9adc5dea00000"]);
     const usdt = await fundFixture(owner);
     const { controller, pool } = await deploySystem(owner, usdt);
     await expectRevert(pool.connect(attacker).buyWithNetUsdt(1n, 1n), "CONTROLLER");
-    const block = await ethers.provider.getBlock("latest");
+    const block = await provider.getBlock("latest");
     await expectRevert(controller.executeCycle(1, block.timestamp + 100, 2_000_000n, GAS), "NONCE");
     await expectRevert(controller.executeCycle(0, block.timestamp - 1, 2_000_000n, GAS), "DEADLINE");
     await expectRevert(controller.executeCycle(0, block.timestamp + 100, 2_000_001n, GAS), "HARD_NAV_LOSS");
