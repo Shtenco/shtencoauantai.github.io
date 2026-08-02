@@ -303,19 +303,19 @@ contract BullishCentralBankV1 {
     }
 
     function _stabilize() internal {
-        uint256 reference = priceSum / SMA_WINDOW;
+        uint256 referencePrice = priceSum / SMA_WINDOW;
         uint256 current = pool.priceX18();
         if (cooldown > 0) {
             cooldown -= 1;
-        } else if (current * 10_000 <= reference * (10_000 - TRIGGER_BPS)) {
-            uint256 declineBps = (reference - current) * 10_000 / reference;
+        } else if (current * 10_000 <= referencePrice * (10_000 - TRIGGER_BPS)) {
+            uint256 declineBps = (referencePrice - current) * 10_000 / referencePrice;
             uint256 burnBps = declineBps * 2;
             if (burnBps > MAX_BURN_BPS) burnBps = MAX_BURN_BPS;
             syna.globalRebaseDown(burnBps);
             cooldown = COOLDOWN_TRADES;
             emit CentralBankAction("GLOBAL_REBASE_DOWN", burnBps, 0, 0);
-        } else if (current * 10_000 >= reference * (10_000 + TRIGGER_BPS)) {
-            uint256 riseBps = (current - reference) * 10_000 / reference;
+        } else if (current * 10_000 >= referencePrice * (10_000 + TRIGGER_BPS)) {
+            uint256 riseBps = (current - referencePrice) * 10_000 / referencePrice;
             uint256 mintBps = riseBps;
             if (mintBps > MAX_MINT_BPS) mintBps = MAX_MINT_BPS;
             uint256 requestedToken = syna.totalSupply() * mintBps / 10_000;
