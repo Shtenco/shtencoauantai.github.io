@@ -1,3 +1,4 @@
+// Exact Polygon V5 compile configuration; comment-only sync for the local deploy bundle.
 const { subtask } = require("hardhat/config");
 const { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } = require("hardhat/builtin-tasks/task-names");
 require("@nomicfoundation/hardhat-ethers");
