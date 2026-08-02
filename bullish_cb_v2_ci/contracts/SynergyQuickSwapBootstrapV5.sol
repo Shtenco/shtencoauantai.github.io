@@ -6,9 +6,8 @@ import {RebaseSynaExactV3} from "./RebaseSynaExactV3.sol";
 import {BullishQuickSwapShieldedV5} from "./BullishQuickSwapShieldedV5.sol";
 
 /// @notice Constructor-atomic Polygon bootstrap for Synergy Coin (SYNA).
-/// @dev A private secret salt hides the future token address until this deployment
-///      is mined. Token, controller, QuickSwap pair and initial liquidity are
-///      created within the same constructor transaction.
+/// @dev Future token/controller addresses depend on in-block entropy and cannot be
+///      calculated by ordinary public-mempool observers before inclusion.
 contract SynergyQuickSwapBootstrapV5 {
     using SafeTokenQS for IERC20QS;
 
@@ -27,6 +26,7 @@ contract SynergyQuickSwapBootstrapV5 {
     RebaseSynaExactV3 public immutable token;
     BullishQuickSwapShieldedV5 public immutable controller;
     address public immutable pair;
+    bytes32 public immutable deploymentEntropyHash;
 
     event SynergyBootstrapped(
         address indexed token,
@@ -64,7 +64,19 @@ contract SynergyQuickSwapBootstrapV5 {
         IERC20QS usdt = IERC20QS(POLYGON_USDT);
         usdt.safeTransferFrom(admin_, address(this), INITIAL_REQUIRED_USDT);
 
-        bytes32 tokenSalt = keccak256(abi.encodePacked(secretSalt, bytes32("SYNA_TOKEN")));
+        bytes32 entropy = keccak256(
+            abi.encode(
+                secretSalt,
+                block.prevrandao,
+                blockhash(block.number - 1),
+                address(this),
+                admin_,
+                tx.gasprice
+            )
+        );
+        deploymentEntropyHash = keccak256(abi.encode(entropy));
+
+        bytes32 tokenSalt = keccak256(abi.encode(entropy, bytes32("SYNA_TOKEN")));
         RebaseSynaExactV3 newToken = new RebaseSynaExactV3{salt: tokenSalt}(address(this));
         require(
             IQuickSwapFactoryV2(QUICKSWAP_V2_FACTORY).getPair(address(newToken), POLYGON_USDT)
@@ -73,7 +85,7 @@ contract SynergyQuickSwapBootstrapV5 {
         );
 
         bytes32 controllerSalt = keccak256(
-            abi.encodePacked(secretSalt, bytes32("SYNA_CONTROLLER"))
+            abi.encode(entropy, bytes32("SYNA_CONTROLLER"))
         );
         BullishQuickSwapShieldedV5 newController = new BullishQuickSwapShieldedV5{
             salt: controllerSalt
