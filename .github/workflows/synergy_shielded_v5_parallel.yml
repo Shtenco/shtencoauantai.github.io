@@ -8,6 +8,7 @@ on:
       - "bullish_cb_v2_ci/contracts/SynergyQuickSwapBootstrapV5.sol"
       - "bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol"
       - "bullish_cb_v2_ci/test/synergy_shielded_v5_polygon_fork.js"
+      - "bullish_cb_v2_ci/test/synergy_shielded_v5_security_only.js"
       - ".github/workflows/synergy_shielded_v5_parallel.yml"
   workflow_dispatch:
 
@@ -21,10 +22,13 @@ jobs:
       matrix:
         include:
           - id: security
-            grep: "deploys below the runtime limit"
+            test_file: test/synergy_shielded_v5_security_only.js
+            grep: "fails closed on zero quote"
           - id: economics
+            test_file: test/synergy_shielded_v5_polygon_fork.js
             grep: "remains positive after complete constructor V5 setup"
           - id: refill
+            test_file: test/synergy_shielded_v5_polygon_fork.js
             grep: "passes protected robot refill"
     name: v5-${{ matrix.id }}
     runs-on: ubuntu-22.04
@@ -54,6 +58,7 @@ jobs:
           rm -f contracts/BullishQuickSwapDirectV4.sol
           rm -rf artifacts cache
           mkdir -p reports/shielded-v5-${{ matrix.id }}
+          node --check ${{ matrix.test_file }}
           npx hardhat compile --force \
             2>&1 | tee reports/shielded-v5-${{ matrix.id }}/compile.log
       - name: Start isolated pinned Polygon fork
@@ -79,7 +84,7 @@ jobs:
       - name: Execute ${{ matrix.id }} proof
         run: |
           set -euo pipefail
-          npx hardhat test test/synergy_shielded_v5_polygon_fork.js \
+          npx hardhat test ${{ matrix.test_file }} \
             --network polygon --grep '${{ matrix.grep }}' \
             2>&1 | tee reports/shielded-v5-${{ matrix.id }}/fork.log
       - name: Validate economics report
