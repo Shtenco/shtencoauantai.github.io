@@ -49,13 +49,8 @@ async function deployFixture() {
   const usdt = new ethers.Contract(USDT, ERC20, owner);
   const artifact = await hre.artifacts.readArtifact("SynergyQuickSwapBootstrapV5");
   const currentNonce = await provider.getTransactionCount(ownerAddress, "pending");
-  const predictedBootstrap = ethers.getCreateAddress({
-    from: ownerAddress,
-    nonce: currentNonce + 1
-  });
-  const secretSalt = ethers.keccak256(
-    ethers.toUtf8Bytes("SYNERGY_SHIELDED_V5_PINNED_FORK_SECRET")
-  );
+  const predictedBootstrap = ethers.getCreateAddress({ from: ownerAddress, nonce: currentNonce + 1 });
+  const secretSalt = ethers.keccak256(ethers.toUtf8Bytes("SYNERGY_SHIELDED_V5_PINNED_FORK_SECRET"));
 
   let setupGas = 0n;
   setupGas += cost(await (await usdt.approve(predictedBootstrap, 2_000_000n)).wait());
@@ -79,7 +74,7 @@ async function deployFixture() {
 
 async function executeProtected(bootstrap, controller, minMetric = 0n) {
   const block = await provider.getBlock("latest");
-  const tx = await bootstrap.executeProtectedCycle(
+  return (await bootstrap.executeProtectedCycle(
     await controller.nonce(),
     await controller.currentExecutionStateHash(),
     block.hash,
@@ -87,8 +82,7 @@ async function executeProtected(bootstrap, controller, minMetric = 0n) {
     ethers.parseUnits("500", "gwei"),
     minMetric,
     { gasLimit: 10_000_000n }
-  );
-  return tx.wait();
+  )).wait();
 }
 
 async function expectRevert(promise, fragment) {
@@ -103,9 +97,22 @@ async function expectRevert(promise, fragment) {
 
 describe("Synergy Coin Shielded V5", function () {
   this.timeout(600000);
+  let fixture;
+  let snapshotId;
+
+  before(async function () {
+    fixture = await deployFixture();
+    snapshotId = await rpc("evm_snapshot");
+  });
+
+  afterEach(async function () {
+    assert.equal(await rpc("evm_revert", [snapshotId]), true);
+    fixture.owner.reset();
+    snapshotId = await rpc("evm_snapshot");
+  });
 
   it("deploys below the runtime limit and blocks zero/stale/public bypass paths", async function () {
-    const { owner, ownerAddress, bootstrap, token, controller } = await deployFixture();
+    const { owner, ownerAddress, bootstrap, token, controller } = fixture;
     assert.equal(await token.name(), "Synergy Coin");
     assert.equal(await token.symbol(), "SYNA");
     assert.notEqual(await bootstrap.pair(), ethers.ZeroAddress);
@@ -115,14 +122,8 @@ describe("Synergy Coin Shielded V5", function () {
     assert((await token.balanceOf(ownerAddress)) > 0n, "free float not delivered to admin");
 
     const block0 = await provider.getBlock("latest");
-    await expectRevert(
-      controller.connect(owner).executeCycle(0, block0.timestamp + 60, 0),
-      "OPERATOR"
-    );
-    await expectRevert(
-      controller.checkedQuoteOut(await token.getAddress(), USDT, 1n),
-      "ZERO_LOCAL_PRICE"
-    );
+    await expectRevert(controller.connect(owner).executeCycle(0, block0.timestamp + 60, 0), "OPERATOR");
+    await expectRevert(controller.checkedQuoteOut(await token.getAddress(), USDT, 1n), "ZERO_LOCAL_PRICE");
 
     const staleState = await controller.currentExecutionStateHash();
     const staleParent = block0.hash;
@@ -146,7 +147,7 @@ describe("Synergy Coin Shielded V5", function () {
   });
 
   it("remains positive after complete constructor V5 setup and ten protected cycles", async function () {
-    const { bootstrap, controller, setupGas } = await deployFixture();
+    const { bootstrap, controller, setupGas } = fixture;
     const initialMetric = await controller.systemMetricUsdt();
     const initialPrice = await controller.spotPriceX18();
     let runtimeGas = 0n;
@@ -175,17 +176,14 @@ describe("Synergy Coin Shielded V5", function () {
       verdict: net > 0 ? "PASS_POSITIVE_SHIELDED_FIRST10" : "STOP_NON_POSITIVE_SHIELDED_FIRST10"
     };
     fs.mkdirSync(path.join(process.cwd(), "reports", "shielded-v5"), { recursive: true });
-    fs.writeFileSync(
-      path.join(process.cwd(), "reports", "shielded-v5", "first10.json"),
-      JSON.stringify(report, null, 2)
-    );
+    fs.writeFileSync(path.join(process.cwd(), "reports", "shielded-v5", "first10.json"), JSON.stringify(report, null, 2));
     console.log("SHIELDED_V5_FIRST10", JSON.stringify(report));
     assert(finalPrice > initialPrice, "price did not rise");
     assert(net > 0, `shielded V5 net is non-positive: ${net}`);
   });
 
   it("passes protected robot refill and exact POL refill", async function () {
-    const { bootstrap, controller } = await deployFixture();
+    const { bootstrap, controller } = fixture;
     await (await bootstrap.setRefillConfig(1_040_000n, 0, 100, 500, 10)).wait();
     const block0 = await provider.getBlock("latest");
     const before = await controller.robotUsdt();
