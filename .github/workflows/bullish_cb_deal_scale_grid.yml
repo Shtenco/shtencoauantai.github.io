@@ -1,0 +1,181 @@
+name: Bullish CB Deal Scale Grid
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_v2_ci/**"
+      - ".github/workflows/bullish_cb_deal_scale_grid.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bullish-deal-scale-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  polygon-scale-grid:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      LOCAL_FORK_URL: http://127.0.0.1:8545
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install exact toolchain
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          mkdir -p reports/grid
+          node --check test/bullish_quickswap_scale_grid_case.js
+          cp contracts/BullishQuickSwapRefillV2.sol /tmp/BullishQuickSwapRefillV2.sol
+          rm -f contracts/BullishQuickSwapDirectV4.sol
+
+      - name: Execute deal-size grid on fresh pinned forks
+        run: |
+          set -euo pipefail
+          for SCALE in 10000 10500 11000 11500 12000 12500 15000 17500 20000; do
+            echo "=== SCALE ${SCALE} bps ==="
+            cp /tmp/BullishQuickSwapRefillV2.sol contracts/BullishQuickSwapRefillV2.sol
+            SCALE="$SCALE" python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          scale = int(os.environ["SCALE"])
+          buy = 100_000 * scale // 10_000
+          sell = 40_000 * scale // 10_000
+          p = Path("contracts/BullishQuickSwapRefillV2.sol")
+          s = p.read_text()
+          s, n1 = re.subn(
+              r"uint256 public constant BUY_USDT = 100_000;[^\n]*",
+              f"uint256 public constant BUY_USDT = {buy}; // scaled {scale} bps",
+              s,
+              count=1,
+          )
+          s, n2 = re.subn(
+              r"uint256 public constant SELL_NOTIONAL_USDT = 40_000;[^\n]*",
+              f"uint256 public constant SELL_NOTIONAL_USDT = {sell}; // scaled {scale} bps",
+              s,
+              count=1,
+          )
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f"constant patch failed: BUY={n1}, SELL={n2}")
+          p.write_text(s)
+          print({"scaleBps": scale, "buy": buy, "sell": sell})
+          PY
+            rm -rf artifacts cache
+            npx hardhat compile --force > "reports/grid/compile_${SCALE}.log" 2>&1
+
+            pkill -f "anvil.*8545" || true
+            anvil \
+              --fork-url "$POLYGON_RPC_URL" \
+              --fork-block-number "$FORK_BLOCK_NUMBER" \
+              --chain-id 137 \
+              --hardfork cancun \
+              --host 127.0.0.1 \
+              --port 8545 \
+              > "reports/grid/anvil_${SCALE}.log" 2>&1 &
+            ANVIL_PID=$!
+            READY=0
+            for i in $(seq 1 90); do
+              if curl -s "$LOCAL_FORK_URL" \
+                -H 'content-type: application/json' \
+                --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+                | grep -q '0x89'; then
+                READY=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$READY" -ne 1 ]; then
+              cat "reports/grid/anvil_${SCALE}.log"
+              exit 1
+            fi
+
+            DEAL_SCALE_BPS="$SCALE" npx hardhat test \
+              test/bullish_quickswap_scale_grid_case.js \
+              --network polygon \
+              2>&1 | tee "reports/grid/fork_${SCALE}.log"
+            mv "reports/scale_${SCALE}.json" "reports/grid/scale_${SCALE}.json"
+            kill "$ANVIL_PID" || true
+            wait "$ANVIL_PID" 2>/dev/null || true
+          done
+
+      - name: Select minimum positive and robust scale
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee reports/grid/summary.log
+          import json
+          from pathlib import Path
+
+          rows = [json.loads(p.read_text()) for p in sorted(Path("reports/grid").glob("scale_*.json"))]
+          rows.sort(key=lambda r: r["scaleBps"])
+          positives = [r for r in rows if r["netGrowthAfterGasUsdt"] > 0]
+          if not positives:
+              raise SystemExit("No tested scale covered full setup + runtime gas")
+          minimum = positives[0]
+          robust = next(
+              (
+                  r for r in positives
+                  if r["gasCoverageMultiple"] >= 1.25
+                  and r["netGrowthAfterGasUsdt"] >= 0.025
+              ),
+              positives[-1],
+          )
+          summary = {
+              "scenario": "BULLISH_QUICKSWAP_DEAL_SCALE_SELECTION",
+              "chainId": 137,
+              "forkBlock": 90790000,
+              "capitalUnchanged": {
+                  "poolUsdt": 1,
+                  "robotUsdt": 1,
+                  "initialMetricUsdt": 3,
+              },
+              "minimumPositive": minimum,
+              "recommendedRobust": robust,
+              "selectionRule": "minimum scale with >=1.25x gas coverage and >=0.025 USDT net; otherwise highest positive tested",
+              "allResults": rows,
+              "mainnetAuthorized": False,
+              "note": "Pinned-fork accounting result only; no key loaded and no mainnet transaction broadcast."
+          }
+          Path("reports/grid/scale_grid_summary.json").write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Bind evidence
+        run: |
+          set -euo pipefail
+          sha256sum \
+            test/bullish_quickswap_scale_grid_case.js \
+            reports/grid/scale_*.json \
+            reports/grid/scale_grid_summary.json \
+            reports/grid/compile_*.log \
+            reports/grid/fork_*.log \
+            > reports/grid/sha256.txt
+          sha256sum -c reports/grid/sha256.txt
+
+      - name: Upload grid evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: bullish-deal-scale-grid-polygon-fork
+          path: bullish_cb_v2_ci/reports/grid
+          if-no-files-found: error
+          compression-level: 6
