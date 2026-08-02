@@ -26,7 +26,7 @@ jobs:
       run:
         working-directory: v8_graph_ci
     env:
-      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      POLYGON_RPC_URL: "https://polygon-bor-rpc.publicnode.com"
       LOCAL_FORK_URL: "http://127.0.0.1:8545"
       FORK_BLOCK_NUMBER: "90790000"
 
