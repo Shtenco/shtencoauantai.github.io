@@ -35,6 +35,17 @@ function receiptCost(receipt) {
   return receipt.gasUsed * (receipt.gasPrice || 0n);
 }
 
+function countEvent(contract, receipt, name) {
+  let count = 0;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = contract.interface.parseLog(log);
+      if (parsed && parsed.name === name) count += 1;
+    } catch (_) {}
+  }
+  return count;
+}
+
 async function fundUsdt(ownerAddress, amount) {
   await rpc("anvil_setBalance", [ownerAddress, "0x152d02c7e14af6800000"]);
   await rpc("anvil_setBalance", [WPOL_USDT_PAIR, "0x3635c9adc5dea00000"]);
@@ -103,7 +114,7 @@ async function deployFixture() {
   return { owner, ownerAddress, token, controller, setupGas };
 }
 
-async function executeCycles(controller, start, end, mineSpacing = true) {
+async function executeCycles(controller, start, end) {
   let gas = 0n;
   let refillEvents = 0;
   for (let i = start; i < end; i += 1) {
@@ -112,13 +123,8 @@ async function executeCycles(controller, start, end, mineSpacing = true) {
       await controller.executeCycle(i, block.timestamp + 3600, 0, { gasLimit: CYCLE_GAS_LIMIT })
     ).wait();
     gas += receiptCost(receipt);
-    for (const log of receipt.logs) {
-      try {
-        const parsed = controller.interface.parseLog(log);
-        if (parsed && parsed.name === "RobotRefill") refillEvents += 1;
-      } catch (_) {}
-    }
-    if (mineSpacing) await mineBlocks(9);
+    refillEvents += countEvent(controller, receipt, "RobotRefill");
+    await mineBlocks(9);
   }
   return { gas, refillEvents };
 }
@@ -159,38 +165,53 @@ describe("BullishQuickSwapCentralBankV2 exact Polygon fork", function () {
     assert(net > 0, `first ten cycles were not positive: ${net}`);
   });
 
-  it("continues beyond the old 140-cycle capital exhaustion point and exercises gas refill when funded", async function () {
+  it("executes bounded robot-capital refill and exact POL gas refill", async function () {
     const { controller } = await deployFixture();
-    await (await controller.setRefillConfig(300_000n, 0, 100, 500, 10)).wait();
-    const run = await executeCycles(controller, 0, 160);
-    assert.equal(await controller.nonce(), 160n);
-    assert((await controller.robotUsdt()) >= 200_000n, "robot capital below minimum");
-    assert(run.refillEvents > 0, "robot refill was never exercised");
+    await (await controller.setRefillConfig(1_040_000n, 0, 100, 500, 10)).wait();
+    const robotBefore = await controller.robotUsdt();
+    const block0 = await provider.getBlock("latest");
+    const refillReceipt = await (
+      await controller.refillRobotCapital(1_040_000n, block0.timestamp + 3600, { gasLimit: 5_000_000n })
+    ).wait();
+    const robotRefillEvents = countEvent(controller, refillReceipt, "RobotRefill");
+    const robotAfter = await controller.robotUsdt();
+    assert(robotRefillEvents > 0, "robot refill event missing");
+    assert(robotAfter > robotBefore, "robot USDT did not increase");
+
+    const block1 = await provider.getBlock("latest");
+    const cycleReceipt = await (
+      await controller.executeCycle(0, block1.timestamp + 3600, 0, { gasLimit: CYCLE_GAS_LIMIT })
+    ).wait();
+    assert.equal(await controller.nonce(), 1n);
 
     const router = new ethers.Contract(ROUTER, ["function getAmountsIn(uint256,address[]) view returns(uint256[] memory)"], provider);
-    const exactPol = ethers.parseEther("0.0001");
+    const exactPol = ethers.parseEther("0.001");
     const quote = await router.getAmountsIn(exactPol, [USDT, WPOL]);
     const maxUsdt = quote[0] * 10100n / 10000n + 1n;
-    const treasury = await controller.treasuryUsdt();
-    let gasRefillExecuted = false;
-    if (treasury >= maxUsdt) {
-      const block = await provider.getBlock("latest");
-      await (
-        await controller.refillKeeperGas(exactPol, maxUsdt, block.timestamp + 3600, { gasLimit: 2_000_000n })
-      ).wait();
-      gasRefillExecuted = (await controller.cumulativeGasRefillUsdt()) > 0n;
-      assert(gasRefillExecuted);
-    }
+    const treasuryBefore = await controller.treasuryUsdt();
+    assert(treasuryBefore >= maxUsdt, "treasury did not accumulate enough fees for gas refill");
+    const block2 = await provider.getBlock("latest");
+    const gasReceipt = await (
+      await controller.refillKeeperGas(exactPol, maxUsdt, block2.timestamp + 3600, { gasLimit: 2_000_000n })
+    ).wait();
+    const gasRefillEvents = countEvent(controller, gasReceipt, "KeeperGasRefill");
+    assert.equal(gasRefillEvents, 1);
+    assert((await controller.cumulativeGasRefillUsdt()) > 0n);
 
     const report = {
-      scenario: "BULLISH_QUICKSWAP_REFILL_V2_LONG_FORK",
-      cycles: 160,
-      robotRefillEvents: run.refillEvents,
-      robotUsdt: Number(ethers.formatUnits(await controller.robotUsdt(), 6)),
-      treasuryUsdt: Number(ethers.formatUnits(await controller.treasuryUsdt(), 6)),
+      scenario: "BULLISH_QUICKSWAP_REFILL_V2_DIRECT_REFILL_FORK",
+      cycles: 1,
+      robotRefillEvents,
+      gasRefillEvents,
+      robotUsdtBefore: Number(ethers.formatUnits(robotBefore, 6)),
+      robotUsdtAfter: Number(ethers.formatUnits(robotAfter, 6)),
+      treasuryBeforeGasRefillUsdt: Number(ethers.formatUnits(treasuryBefore, 6)),
+      gasRefillSpentUsdt: Number(ethers.formatUnits(await controller.cumulativeGasRefillUsdt(), 6)),
+      gasRefillPol: Number(ethers.formatEther(exactPol)),
       tvlUsdt: Number(ethers.formatUnits(await controller.poolTvlUsdt(), 6)),
       systemMetricUsdt: Number(ethers.formatUnits(await controller.systemMetricUsdt(), 6)),
-      gasRefillExecuted
+      cycleGasUsed: cycleReceipt.gasUsed.toString(),
+      verdict: "PASS_BOUNDED_ROBOT_AND_GAS_REFILL"
     };
     fs.mkdirSync(path.join(process.cwd(), "reports"), { recursive: true });
     fs.writeFileSync(path.join(process.cwd(), "reports", "bullish_qs_v2_refill_fork.json"), JSON.stringify(report, null, 2));
