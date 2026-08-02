@@ -2,7 +2,7 @@
 pragma solidity ^0.8.26;
 
 contract RebaseSynaExactV3 {
-    string public constant name = "SYNERGY";
+    string public constant name = "Synergy Coin";
     string public constant symbol = "SYNA";
     uint8 public constant decimals = 18;
     uint256 public constant INITIAL_GONS_PER_FRAGMENT = 1e18;
