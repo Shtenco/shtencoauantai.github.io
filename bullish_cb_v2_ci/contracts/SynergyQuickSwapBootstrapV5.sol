@@ -41,6 +41,7 @@ contract SynergyQuickSwapBootstrapV5 {
     event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
     event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
     event PolWithdrawn(address indexed recipient, uint256 amount);
+    event TokenRescued(address indexed token, address indexed recipient, uint256 amount);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "ADMIN");
@@ -101,7 +102,6 @@ contract SynergyQuickSwapBootstrapV5 {
                 == newPair,
             "PAIR_FACTORY_MISMATCH"
         );
-        require(usdt.balanceOf(address(this)) == 0, "BOOTSTRAP_USDT_REMAINDER");
 
         uint256 freeFloat = newToken.balanceOf(address(this));
         require(freeFloat > 0 && newToken.transfer(admin_, freeFloat), "FREE_FLOAT_TRANSFER");
@@ -139,10 +139,19 @@ contract SynergyQuickSwapBootstrapV5 {
     }
 
     function withdrawPol(address payable recipient, uint256 amount) external onlyAdmin {
-        require(recipient != address(0) && amount > 0 && amount <= address(this).balance, "BAD_POL_WITHDRAW");
+        require(
+            recipient != address(0) && amount > 0 && amount <= address(this).balance,
+            "BAD_POL_WITHDRAW"
+        );
         (bool ok,) = recipient.call{value: amount}("");
         require(ok, "POL_WITHDRAW_FAILED");
         emit PolWithdrawn(recipient, amount);
+    }
+
+    function rescueToken(address token_, address recipient, uint256 amount) external onlyAdmin {
+        require(token_ != address(0) && recipient != address(0) && amount > 0, "BAD_RESCUE");
+        IERC20QS(token_).safeTransfer(recipient, amount);
+        emit TokenRescued(token_, recipient, amount);
     }
 
     function executeProtectedCycle(
