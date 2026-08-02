@@ -5,8 +5,6 @@ on:
     branches: [main]
     paths:
       - "v8_graph_ci/v16_chunks/**"
-      - "v8_graph_ci/test/v16_gradient_opportunity_market_polygon_fork.js"
-      - "v8_graph_ci/scripts/validate_v16_gradient_opportunity.py"
       - "v8_graph_ci/scripts/build_v15_7_50_pool_manifest.js"
       - ".github/workflows/v16_gradient_opportunity_market.yml"
   workflow_dispatch:
@@ -57,11 +55,10 @@ jobs:
           cat v16_chunks/part* > /tmp/v16_bundle.b64
           base64 -d /tmp/v16_bundle.b64 > /tmp/v16_bundle.tar.gz
           tar -xzf /tmp/v16_bundle.tar.gz
-          git checkout HEAD -- test/v16_gradient_opportunity_market_polygon_fork.js scripts/validate_v16_gradient_opportunity.py
           echo "5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5  contracts/v16/GradientOpportunityMarketV16.sol" | sha256sum -c
-          test "$(git hash-object test/v16_gradient_opportunity_market_polygon_fork.js)" = "aecfb6e00774bbcc2132692a28ebba2f9f5286e0"
-          test "$(git hash-object scripts/validate_v16_gradient_opportunity.py)" = "7a89ccfc47967a8faebdbfbdeecb713d41a48026"
-          printf '%s\n' "contractSha256=5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5" "testGitBlob=aecfb6e00774bbcc2132692a28ebba2f9f5286e0" "validatorGitBlob=7a89ccfc47967a8faebdbfbdeecb713d41a48026" > reports/v16_source_binding.txt
+          echo "f776a138707192b1f4679aaea785ccbafa096036773c31a36a038df7c71c2e36  test/v16_gradient_opportunity_market_polygon_fork.js" | sha256sum -c
+          echo "b1c0daec7ce318d1724b3ccb0b8429d5edbc53210f7a9f5ef5d965f164836c5a  scripts/validate_v16_gradient_opportunity.py" | sha256sum -c
+          printf '%s\n' "contractSha256=5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5" "testSha256=f776a138707192b1f4679aaea785ccbafa096036773c31a36a038df7c71c2e36" "validatorSha256=b1c0daec7ce318d1724b3ccb0b8429d5edbc53210f7a9f5ef5d965f164836c5a" > reports/v16_source_binding.txt
           node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v16_gradient_opportunity_market_polygon_fork.js
           python -m py_compile scripts/validate_v16_gradient_opportunity.py
