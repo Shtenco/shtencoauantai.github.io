@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { Contract, JsonRpcProvider, getAddress } from "ethers";
 
 const output = process.argv[2] || "bundle/preflight.json";
@@ -73,6 +74,6 @@ if (
 ) {
   throw new Error("Missing contract code");
 }
-fs.mkdirSync(new URL(".", `file://${process.cwd()}/${output}`).pathname, { recursive: true });
+fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`);
 console.log(JSON.stringify(result, null, 2));
