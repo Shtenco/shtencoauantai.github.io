@@ -12,7 +12,12 @@ const WPOL = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270";
 const WPOL_USDT_PAIR = "0x604229c960e5cacf2aaeac8be68ac07ba9df81c3";
 const DEV_MNEMONIC = "test test test test test test test test test test test junk";
 const GAS_LIMIT = 8_000_000n;
-const ERC20 = ["function transfer(address,uint256) returns(bool)", "function approve(address,uint256) returns(bool)"];
+const ERC20 = [
+  "function transfer(address,uint256) returns(bool)",
+  "function approve(address,uint256) returns(bool)",
+  "function allowance(address,address) view returns(uint256)",
+  "function balanceOf(address) view returns(uint256)"
+];
 
 async function rpc(method, params = []) { return provider.send(method, params); }
 function countEvent(contract, receipt, name) {
@@ -59,14 +64,45 @@ async function deployFixture() {
     block.timestamp + 3600,
     { gasLimit: GAS_LIMIT }
   )).wait();
-  return controller;
+  return { controller, ownerAddress };
+}
+
+async function traceRefillFailure(controller, ownerAddress, exactPol, maxUsdt, deadline) {
+  try {
+    await controller.refillKeeperGas.staticCall(exactPol, maxUsdt, deadline, { gasLimit: 2_000_000n });
+    console.log("REFILL_STATIC_CALL", "PASS");
+    return;
+  } catch (error) {
+    console.log("REFILL_STATIC_REVERT", JSON.stringify({
+      code: error.code,
+      reason: error.reason,
+      shortMessage: error.shortMessage,
+      data: error.data,
+      message: error.message,
+      rpcMessage: error.info && error.info.error && error.info.error.message,
+      rpcData: error.info && error.info.error && error.info.error.data
+    }));
+    const populated = await controller.refillKeeperGas.populateTransaction(exactPol, maxUsdt, deadline);
+    try {
+      const trace = await rpc("debug_traceCall", [{
+        from: ownerAddress,
+        to: await controller.getAddress(),
+        data: populated.data,
+        gas: "0x1e8480"
+      }, "latest", { tracer: "callTracer" }]);
+      console.log("REFILL_CALL_TRACE", JSON.stringify(trace));
+    } catch (traceError) {
+      console.log("REFILL_TRACE_ERROR", traceError.message);
+    }
+    throw error;
+  }
 }
 
 describe("BullishQuickSwapScaled175 focused refill regression", function () {
   this.timeout(600000);
 
   it("preserves bounded robot refill and exact POL refill", async function () {
-    const controller = await deployFixture();
+    const { controller, ownerAddress } = await deployFixture();
     await (await controller.setRefillConfig(1_040_000n, 0, 100, 500, 10)).wait();
     const robotBefore = await controller.robotUsdt();
     const block0 = await provider.getBlock("latest");
@@ -97,12 +133,25 @@ describe("BullishQuickSwapScaled175 focused refill regression", function () {
     const quote = await router.getAmountsIn(exactPol, [USDT, WPOL]);
     const maxUsdt = quote[0] * 10100n / 10000n + 1n;
     const treasuryBefore = await controller.treasuryUsdt();
+    const usdt = new ethers.Contract(USDT, ERC20, provider);
+    const allowance = await usdt.allowance(await controller.getAddress(), ROUTER);
+    const actualUsdt = await usdt.balanceOf(await controller.getAddress());
+    console.log("REFILL_STATE", JSON.stringify({
+      treasury: treasuryBefore.toString(),
+      maxUsdt: maxUsdt.toString(),
+      allowance: allowance.toString(),
+      actualUsdt: actualUsdt.toString(),
+      block: (await provider.getBlockNumber())
+    }));
     assert(treasuryBefore >= maxUsdt, "treasury cannot fund POL refill");
+    assert(allowance >= maxUsdt, "router allowance too low");
     const block2 = await provider.getBlock("latest");
+    const deadline = block2.timestamp + 3600;
+    await traceRefillFailure(controller, ownerAddress, exactPol, maxUsdt, deadline);
     const gasReceipt = await (await controller.refillKeeperGas(
       exactPol,
       maxUsdt,
-      block2.timestamp + 3600,
+      deadline,
       { gasLimit: 2_000_000n }
     )).wait();
     const gasRefillEvents = countEvent(controller, gasReceipt, "KeeperGasRefill");
