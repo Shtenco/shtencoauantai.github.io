@@ -46,7 +46,15 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p = Path('contracts/BullishQuickSwapDirectV4.sol')
-          p.write_text(p.read_text().replace('reference', 'referencePrice'))
+          s = p.read_text()
+          s = s.replace('reference', 'referencePrice')
+          s = s.replace('error GasRefill();', 'error GasRefillError();')
+          s = s.replace('revert GasRefill();', 'revert GasRefillError();')
+          s = s.replace(
+              'IERC20V4(usdt_).approve(router_, type(uint256).max);',
+              'SafeTransferV4.approve(IERC20V4(usdt_), router_, type(uint256).max);'
+          )
+          p.write_text(s)
           PY
           node --check test/bullish_quickswap_direct_v4_polygon_fork.js
           npx hardhat compile --force 2>&1 | tee reports/compile.log
