@@ -43,8 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ci/bullish-cb-microcycle
+          ref: ${{ github.sha }}
           fetch-depth: 0
+      - name: Bind checked-out commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          mkdir -p reports/shielded-v5-${{ matrix.id }}
+          git rev-parse HEAD | tee reports/shielded-v5-${{ matrix.id }}/commit.txt
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -57,10 +63,17 @@ jobs:
           npm install --no-audit --no-fund
           rm -f contracts/BullishQuickSwapDirectV4.sol
           rm -rf artifacts cache
-          mkdir -p reports/shielded-v5-${{ matrix.id }}
           node --check ${{ matrix.test_file }}
           npx hardhat compile --force \
             2>&1 | tee reports/shielded-v5-${{ matrix.id }}/compile.log
+          sha256sum \
+            contracts/RebaseSynaExactV3.sol \
+            contracts/BullishQuickSwapRefillV2.sol \
+            contracts/BullishQuickSwapShieldedV5.sol \
+            contracts/SynergyQuickSwapBootstrapV5.sol \
+            test/synergy_shielded_v5_polygon_fork.js \
+            test/synergy_shielded_v5_security_only.js \
+            > reports/shielded-v5-${{ matrix.id }}/source-sha256.txt
       - name: Start isolated pinned Polygon fork
         run: |
           set -euo pipefail
@@ -102,6 +115,13 @@ jobs:
           Path("reports/shielded-v5-economics/first10.json").write_text(json.dumps(r, indent=2))
           print(json.dumps(r, indent=2))
           PY
+      - name: Bind job evidence
+        run: |
+          set -euo pipefail
+          find reports/shielded-v5-${{ matrix.id }} -maxdepth 1 -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            > reports/shielded-v5-${{ matrix.id }}/evidence-sha256.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
