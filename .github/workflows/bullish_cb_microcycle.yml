@@ -1,4 +1,4 @@
-name: Bullish CB Microcycle Polygon Fork
+name: Bullish CB Microcycle Fork Then Mainnet Gate
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pinned-polygon-fork:
+  fork-then-mainnet-gate:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     defaults:
@@ -84,7 +84,7 @@ jobs:
           set -euo pipefail
           npm run test:fork 2>&1 | tee reports/fork.log
 
-      - name: Validate strict economic interpretation
+      - name: Validate strict fork economics
         shell: bash
         run: |
           set -euo pipefail
@@ -108,10 +108,10 @@ jobs:
           assert data['tvl']['organicExternalChangeUsdt'] == 0
           assert data['accounting']['externalRevenueUsdt'] == 0
           assert data['accounting']['hardNavDeltaUsdt'] < 0
-          assert data['gas']['oneUsdtBudgetCovered'] is True
           assert data['strictVerdict'] == 'FAIL_NO_EXTERNAL_VALUE'
-          assert data['mainnetGate'] == 'BLOCKED_BY_FORK_ECONOMICS'
-          print(json.dumps({
+          assert data['mainnetGate'].startswith('BLOCKED_BY_')
+
+          verdict = {
               'verdict': 'PASS_STRICT_NEGATIVE_CONTROL',
               'mainnetBroadcastAllowed': False,
               'priceMultiple': data['price']['multiple'],
@@ -119,8 +119,34 @@ jobs:
               'grossTvlChangeUsdt': data['tvl']['grossChangeUsdt'],
               'organicExternalTvlChangeUsdt': 0,
               'fullGasUsdt': data['gas']['totalGasUsdt'],
+              'oneUsdtGasBudgetCovered': data['gas']['oneUsdtBudgetCovered'],
               'hardNavDeltaUsdt': data['accounting']['hardNavDeltaUsdt'],
-          }, indent=2))
+              'mainnetGate': data['mainnetGate'],
+          }
+          Path('reports/strict_verdict.json').write_text(json.dumps(verdict, indent=2))
+          print(json.dumps(verdict, indent=2))
+          PY
+
+      - name: Mainnet stage — enforce fail-closed decision
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee reports/mainnet_gate.log
+          import json
+          from pathlib import Path
+
+          verdict = json.loads(Path('reports/strict_verdict.json').read_text())
+          assert verdict['mainnetBroadcastAllowed'] is False
+          decision = {
+              'stage': 'POLYGON_MAINNET',
+              'transactionSigned': False,
+              'transactionBroadcast': False,
+              'decision': 'SKIPPED_FAIL_CLOSED',
+              'reason': verdict['mainnetGate'],
+              'privateKeyLoaded': False,
+          }
+          Path('reports/mainnet_gate.json').write_text(json.dumps(decision, indent=2))
+          print(json.dumps(decision, indent=2))
           PY
 
       - name: Bind evidence with checksums
@@ -131,16 +157,19 @@ jobs:
             contracts/BullishMicrocycleV1.sol \
             test/bullish_cb_microcycle_polygon_fork.js \
             reports/bullish_cb_microcycle_polygon_fork.json \
+            reports/strict_verdict.json \
+            reports/mainnet_gate.json \
             reports/compile.log \
             reports/fork.log \
             reports/validator.log \
+            reports/mainnet_gate.log \
             > reports/sha256.txt
           sha256sum -c reports/sha256.txt
 
-      - name: Upload immutable fork evidence
+      - name: Upload immutable fork and mainnet-gate evidence
         uses: actions/upload-artifact@v4
         with:
-          name: synergy-bullish-cb-microcycle-polygon-fork
+          name: synergy-bullish-cb-microcycle-fork-then-mainnet-gate
           path: |
             bullish_cb_ci/artifacts/contracts/BullishMicrocycleV1.sol
             bullish_cb_ci/reports
