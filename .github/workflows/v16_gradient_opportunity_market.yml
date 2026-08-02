@@ -48,7 +48,7 @@ jobs:
         with:
           version: stable
 
-      - name: Install and compile V16 source
+      - name: Install and compile exact V16 source
         shell: bash
         run: |
           set -euo pipefail
@@ -57,8 +57,11 @@ jobs:
           cat v16_chunks/part* > /tmp/v16_bundle.b64
           base64 -d /tmp/v16_bundle.b64 > /tmp/v16_bundle.tar.gz
           tar -xzf /tmp/v16_bundle.tar.gz
+          git checkout HEAD -- test/v16_gradient_opportunity_market_polygon_fork.js scripts/validate_v16_gradient_opportunity.py
           echo "5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5  contracts/v16/GradientOpportunityMarketV16.sol" | sha256sum -c
-          printf '%s\n' "testGitBlob=aecfb6e00774bbcc2132692a28ebba2f9f5286e0" "validatorGitBlob=7a89ccfc47967a8faebdbfbdeecb713d41a48026" > reports/v16_source_binding.txt
+          test "$(git hash-object test/v16_gradient_opportunity_market_polygon_fork.js)" = "aecfb6e00774bbcc2132692a28ebba2f9f5286e0"
+          test "$(git hash-object scripts/validate_v16_gradient_opportunity.py)" = "7a89ccfc47967a8faebdbfbdeecb713d41a48026"
+          printf '%s\n' "contractSha256=5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5" "testGitBlob=aecfb6e00774bbcc2132692a28ebba2f9f5286e0" "validatorGitBlob=7a89ccfc47967a8faebdbfbdeecb713d41a48026" > reports/v16_source_binding.txt
           node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v16_gradient_opportunity_market_polygon_fork.js
           python -m py_compile scripts/validate_v16_gradient_opportunity.py
@@ -95,23 +98,7 @@ jobs:
           cat reports/v16_anvil.log
           exit 1
 
-      - name: Inject one-run positive custom-error diagnostic
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('test/v16_gradient_opportunity_market_polygon_fork.js')
-          s = p.read_text()
-          needle = '''    const tx = await fx.engine.connect(fx.solverB).run(approval.epoch, plan, {\n      gasPrice: GAS_PRICE,\n      gasLimit: 15_000_000\n    });'''
-          replacement = '''    try {\n      await fx.engine.connect(fx.solverB).run.staticCall(approval.epoch, plan, { gasPrice: GAS_PRICE });\n      console.log("V16_POSITIVE_STATIC_CALL_PASS");\n    } catch (error) {\n      console.error("V16_POSITIVE_STATIC_DATA", error.data || error);\n      try { console.error("V16_POSITIVE_STATIC_PARSED", fx.engine.interface.parseError(error.data)); } catch (_) {}\n      throw error;\n    }\n    const tx = await fx.engine.connect(fx.solverB).run(approval.epoch, plan, {\n      gasPrice: GAS_PRICE,\n      gasLimit: 15_000_000\n    });'''
-          idx = s.rfind(needle)
-          if idx < 0:
-              raise SystemExit('positive diagnostic injection target missing')
-          p.write_text(s[:idx] + replacement + s[idx + len(needle):])
-          PY
-          node --check test/v16_gradient_opportunity_market_polygon_fork.js
-
-      - name: Execute V16 diagnostic fork replay
+      - name: Execute exact V16 fork test
         shell: bash
         run: |
           set -euo pipefail
