@@ -3,9 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const { ethers, network } = require("hardhat");
 
-const USDT = "0xc2132D05D31c914a87C6611C10748AaCbA1b58e8F";
-const WPOL = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";
-const WPOL_USDT_PAIR = "0x604229c960e5CACF2aaEAc8Be68Ac07BA9dF81c3";
+const USDT = "0xc2132d05d31c914a87c6611c10748aacba1b58e8f";
+const WPOL = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270";
+const WPOL_USDT_PAIR = "0x604229c960e5cacf2aaeac8be68ac07ba9df81c3";
 const FIXTURE_DONOR = WPOL_USDT_PAIR;
 const DEV_MNEMONIC = "test test test test test test test test test test test junk";
 const GWEI = 10n ** 9n;
@@ -58,10 +58,10 @@ async function polPriceUsdt() {
   const [token0, token1, reserves] = await Promise.all([pair.token0(), pair.token1(), pair.getReserves()]);
   let usdtReserve;
   let wpolReserve;
-  if (token0.toLowerCase() === USDT.toLowerCase() && token1.toLowerCase() === WPOL.toLowerCase()) {
+  if (token0.toLowerCase() === USDT && token1.toLowerCase() === WPOL) {
     usdtReserve = reserves[0];
     wpolReserve = reserves[1];
-  } else if (token1.toLowerCase() === USDT.toLowerCase() && token0.toLowerCase() === WPOL.toLowerCase()) {
+  } else if (token1.toLowerCase() === USDT && token0.toLowerCase() === WPOL) {
     usdtReserve = reserves[1];
     wpolReserve = reserves[0];
   } else {
@@ -71,25 +71,27 @@ async function polPriceUsdt() {
 }
 
 async function fundFixture(owner, amount = 2_000_000n) {
-  await rpc("anvil_setBalance", [owner.address, "0x152d02c7e14af6800000"]);
+  const ownerAddress = await owner.getAddress();
+  await rpc("anvil_setBalance", [ownerAddress, "0x152d02c7e14af6800000"]);
   await rpc("anvil_setBalance", [FIXTURE_DONOR, "0x3635c9adc5dea00000"]);
   await rpc("anvil_impersonateAccount", [FIXTURE_DONOR]);
   const donor = await ethers.getImpersonatedSigner(FIXTURE_DONOR);
   const usdt = new ethers.Contract(USDT, ERC20_ABI, owner);
-  const before = await usdt.balanceOf(owner.address);
-  await (await usdt.connect(donor).transfer(owner.address, amount)).wait();
-  assert.equal((await usdt.balanceOf(owner.address)) - before, amount);
+  const before = await usdt.balanceOf(ownerAddress);
+  await (await usdt.connect(donor).transfer(ownerAddress, amount)).wait();
+  assert.equal((await usdt.balanceOf(ownerAddress)) - before, amount);
   return usdt;
 }
 
 async function deploySystem(owner, usdt) {
+  const ownerAddress = await owner.getAddress();
   let setupGasWei = 0n;
   const Token = await ethers.getContractFactory("RebaseSynaV1", owner);
-  const token = await Token.deploy(owner.address, GAS);
+  const token = await Token.deploy(ownerAddress, GAS);
   setupGasWei += receiptCost(await token.deploymentTransaction().wait());
 
   const Controller = await ethers.getContractFactory("BullishCentralBankV1", owner);
-  const controller = await Controller.deploy(owner.address, USDT, await token.getAddress(), GAS);
+  const controller = await Controller.deploy(ownerAddress, USDT, await token.getAddress(), GAS);
   setupGasWei += receiptCost(await controller.deploymentTransaction().wait());
 
   const Pool = await ethers.getContractFactory("SecureSynaUsdtPoolV1", owner);
@@ -242,7 +244,8 @@ describe("SYNERGY bullish CB microcycle on pinned Polygon fork", function () {
   it("rejects public calls, replay, stale deadline and invented NAV", async function () {
     const owner = ethers.Wallet.fromPhrase(DEV_MNEMONIC).connect(ethers.provider);
     const attacker = ethers.Wallet.createRandom().connect(ethers.provider);
-    await rpc("anvil_setBalance", [attacker.address, "0x3635c9adc5dea00000"]);
+    const attackerAddress = await attacker.getAddress();
+    await rpc("anvil_setBalance", [attackerAddress, "0x3635c9adc5dea00000"]);
     const usdt = await fundFixture(owner);
     const { controller, pool } = await deploySystem(owner, usdt);
     await expectRevert(pool.connect(attacker).buyWithNetUsdt(1n, 1n), "CONTROLLER");
