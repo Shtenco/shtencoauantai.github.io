@@ -37,6 +37,7 @@ async function fundUsdt(ownerAddress, amount) {
   await rpc("anvil_impersonateAccount", [WPOL_USDT_PAIR]);
   const donor = await provider.getSigner(WPOL_USDT_PAIR);
   await (await new ethers.Contract(USDT, ERC20, donor).transfer(ownerAddress, amount)).wait();
+  await (await new ethers.Contract(WPOL_USDT_PAIR, ["function sync()"], donor).sync()).wait();
   await rpc("anvil_stopImpersonatingAccount", [WPOL_USDT_PAIR]);
 }
 
