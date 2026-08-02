@@ -9,6 +9,7 @@ on:
       - "bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol"
       - "bullish_cb_v2_ci/test/synergy_shielded_v5_polygon_fork.js"
       - "bullish_cb_v2_ci/test/synergy_shielded_v5_security_only.js"
+      - "bullish_cb_v2_ci/hardhat.config.js"
       - ".github/workflows/synergy_shielded_v5_parallel.yml"
   workflow_dispatch:
 
@@ -67,6 +68,7 @@ jobs:
           npx hardhat compile --force \
             2>&1 | tee reports/shielded-v5-${{ matrix.id }}/compile.log
           sha256sum \
+            hardhat.config.js \
             contracts/RebaseSynaExactV3.sol \
             contracts/BullishQuickSwapRefillV2.sol \
             contracts/BullishQuickSwapShieldedV5.sol \
