@@ -6,6 +6,7 @@ on:
     paths:
       - "v8_graph_ci/contracts/v15_7/**"
       - "v8_graph_ci/test/v15_7_aave_50_pool_qe_qt_polygon_fork.js"
+      - "v8_graph_ci/scripts/patch_v15_7_token_addresses.py"
       - "v8_graph_ci/scripts/validate_v15_7.py"
       - ".github/workflows/v15_7_aave_50_pool.yml"
   workflow_dispatch:
@@ -53,8 +54,9 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           mkdir -p reports
+          python scripts/patch_v15_7_token_addresses.py
           node --check test/v15_7_aave_50_pool_qe_qt_polygon_fork.js
-          python -m py_compile scripts/validate_v15_7.py
+          python -m py_compile scripts/patch_v15_7_token_addresses.py scripts/validate_v15_7.py
           npx hardhat compile --force 2>&1 | tee reports/v15_7_compile.log
 
       - name: Start pinned Polygon archive fork
