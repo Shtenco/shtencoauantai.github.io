@@ -21,6 +21,7 @@ async function rpc(method, params = []) { return provider.send(method, params); 
 
 async function freshLatestBlock() {
   const raw = await rpc("eth_getBlockByNumber", ["latest", false]);
+  assert(raw && raw.hash && raw.timestamp, "fresh latest block unavailable");
   return { hash: raw.hash, timestamp: Number(BigInt(raw.timestamp)) };
 }
 
@@ -42,24 +43,6 @@ async function expectCallRevert(promise, fragment) {
     return;
   }
   assert.fail(`expected call revert ${fragment}`);
-}
-
-async function expectTransactionRevert(txPromise, fragment) {
-  let tx;
-  try {
-    tx = await txPromise;
-    await tx.wait();
-  } catch (error) {
-    if (!tx) {
-      assert(String(error.message).includes(fragment), `expected ${fragment}, got ${error.message}`);
-      return;
-    }
-    const trace = await rpc("debug_traceTransaction", [tx.hash, { tracer: "callTracer" }]);
-    const encoded = JSON.stringify(trace);
-    assert(encoded.includes(fragment), `expected trace ${fragment}, got ${encoded}`);
-    return;
-  }
-  assert.fail(`expected transaction revert ${fragment}`);
 }
 
 async function deployFixture() {
@@ -103,10 +86,11 @@ describe("Synergy Shielded V5 explicit security proof", function () {
     assert.equal(await token.symbol(), "SYNA");
     assert.notEqual(await provider.getCode(await bootstrap.pair()), "0x");
     assert((await provider.getCode(await bootstrap.getAddress())).length / 2 - 1 <= 24_576);
+    assert((await provider.getCode(await controller.getAddress())).length / 2 - 1 <= 24_576);
 
     const initialBlock = await freshLatestBlock();
     await expectCallRevert(
-      controller.connect(owner).executeCycle(0, initialBlock.timestamp + 60, 0),
+      controller.connect(owner).executeCycle.staticCall(0, initialBlock.timestamp + 60, 0),
       "OPERATOR"
     );
     await expectCallRevert(
@@ -115,6 +99,7 @@ describe("Synergy Shielded V5 explicit security proof", function () {
     );
 
     const committedState = await controller.currentExecutionStateHash();
+    const committedNonce = await controller.nonce();
     const router = new ethers.Contract(ROUTER, ROUTER_ABI, owner);
     await (await token.approve(ROUTER, ethers.MaxUint256)).wait();
     const attackBlock = await freshLatestBlock();
@@ -127,30 +112,30 @@ describe("Synergy Shielded V5 explicit security proof", function () {
     )).wait();
 
     const postAttackBlock = await freshLatestBlock();
-    await expectTransactionRevert(
-      bootstrap.executeProtectedCycle(
-        await controller.nonce(),
+    await expectCallRevert(
+      bootstrap.executeProtectedCycle.staticCall(
+        committedNonce,
         committedState,
         postAttackBlock.hash,
         postAttackBlock.timestamp + 60,
         ethers.parseUnits("500", "gwei"),
-        0,
-        { gasLimit: 10_000_000n }
+        0
       ),
       "STATE_CHANGED"
     );
 
-    const latest = await freshLatestBlock();
     const validState = await controller.currentExecutionStateHash();
-    await expectTransactionRevert(
-      bootstrap.executeProtectedCycle(
+    const staleParent = postAttackBlock.hash;
+    await rpc("anvil_mine", ["0x1"]);
+    const latest = await freshLatestBlock();
+    await expectCallRevert(
+      bootstrap.executeProtectedCycle.staticCall(
         await controller.nonce(),
         validState,
-        postAttackBlock.hash,
+        staleParent,
         latest.timestamp + 60,
         ethers.parseUnits("500", "gwei"),
-        0,
-        { gasLimit: 10_000_000n }
+        0
       ),
       "PARENT_BLOCK_CHANGED"
     );
