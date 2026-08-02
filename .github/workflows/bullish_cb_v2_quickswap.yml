@@ -68,9 +68,12 @@ jobs:
           cat reports/anvil.log
           exit 1
       - name: Execute first-ten and refill fork tests
-        run: npm run test:fork 2>&1 | tee reports/fork.log
+        run: |
+          set -euo pipefail
+          npm run test:fork 2>&1 | tee reports/fork.log
       - name: Validate reports
         run: |
+          set -euo pipefail
           python - <<'PY' | tee reports/validator.log
           import json
           from pathlib import Path
@@ -90,6 +93,7 @@ jobs:
           PY
       - name: Bind evidence
         run: |
+          set -euo pipefail
           sha256sum \
             contracts/BullishQuickSwapRefillV2.sol \
             test/bullish_quickswap_refill_v2_polygon_fork.js \
