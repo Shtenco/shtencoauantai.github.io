@@ -1,0 +1,111 @@
+name: Bullish CB Scaled175 First10
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_v2_ci/**"
+      - ".github/workflows/bullish_cb_scaled175_first10.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bullish-scaled175-first10-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scaled175-first10:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      LOCAL_FORK_URL: http://127.0.0.1:8545
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Compile exact scaled175 contract
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          rm -f contracts/BullishQuickSwapDirectV4.sol
+          rm -rf artifacts cache
+          mkdir -p reports/scaled175
+          node --check test/bullish_quickswap_scaled175_first10.js
+          npx hardhat compile --force 2>&1 | tee reports/scaled175/compile.log
+      - name: Start pinned Polygon fork
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/scaled175/anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/scaled175/anvil.log
+          exit 1
+      - name: Execute scaled175 first-ten proof
+        run: |
+          set -euo pipefail
+          npx hardhat test test/bullish_quickswap_scaled175_first10.js --network polygon \
+            2>&1 | tee reports/scaled175/fork.log
+      - name: Validate result
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee reports/scaled175/validator.log
+          import json
+          from pathlib import Path
+          r = json.loads(Path("reports/scaled175/first10.json").read_text())
+          assert r["dealScaleBps"] == 17500
+          assert r["buyUsdt"] == 0.175
+          assert r["sellNotionalUsdt"] == 0.07
+          assert r["netGrowthAfterGasUsdt"] > 0
+          assert r["gasCoverageMultiple"] >= 1.5
+          assert r["netAt150PctGasUsdt"] > 0
+          assert r["verdict"] == "PASS_ROBUST_POSITIVE_FIRST_10"
+          print(json.dumps(r, indent=2))
+          PY
+      - name: Bind evidence
+        run: |
+          set -euo pipefail
+          sha256sum \
+            contracts/RebaseSynaExactV3.sol \
+            contracts/BullishQuickSwapRefillV2.sol \
+            contracts/BullishQuickSwapScaled175.sol \
+            test/bullish_quickswap_scaled175_first10.js \
+            reports/scaled175/first10.json \
+            reports/scaled175/compile.log \
+            reports/scaled175/fork.log \
+            reports/scaled175/validator.log \
+            > reports/scaled175/sha256.txt
+          sha256sum -c reports/scaled175/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bullish-scaled175-first10
+          path: bullish_cb_v2_ci/reports/scaled175
+          if-no-files-found: error
