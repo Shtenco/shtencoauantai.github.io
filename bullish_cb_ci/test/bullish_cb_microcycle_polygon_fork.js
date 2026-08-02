@@ -5,7 +5,7 @@ const hre = require("hardhat");
 const { ethers } = hre;
 
 const provider = new ethers.JsonRpcProvider(process.env.LOCAL_FORK_URL || "http://127.0.0.1:8545");
-const USDT = "0xc2132d05d31c914a87c6611c10748aacba1b58e8f";
+const USDT = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f";
 const WPOL = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270";
 const WPOL_USDT_PAIR = "0x604229c960e5cacf2aaeac8be68ac07ba9df81c3";
 const FIXTURE_DONOR = WPOL_USDT_PAIR;
