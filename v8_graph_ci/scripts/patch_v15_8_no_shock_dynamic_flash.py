@@ -21,13 +21,19 @@ text = text.replace(
     1,
 )
 
+helper_start = text.find('async function impersonatedTransfer(')
+helper_end = text.find('async function eligible(', helper_start)
+if helper_start < 0 or helper_end < 0:
+    raise SystemExit("impersonation helper anchors missing")
+text = text[:helper_start] + text[helper_end:]
+
 start = text.find('    const routeV2 = await v2f.getPair(WPOL, USDT);')
 end_marker = '    const best = await selectBest(pools, v2r, v3q);'
 end = text.find(end_marker, start)
 if start < 0 or end < 0:
     raise SystemExit("shock block anchors missing")
 replacement = '''    // V15.8: no impersonation, no reserve transfer and no pre-cycle price shock.
-    // Search the exact 50-pool graph across several real Aave principal sizes.
+    // Search the exact validated 50-pool graph across several real Aave principal sizes.
     let best = null;
     let flashAmount = 0n;
     let bestExternalEdge = -(1n << 255n);
@@ -68,9 +74,9 @@ for old, new in replacements.items():
         raise SystemExit(f"missing replacement anchor: {old}")
     text = text.replace(old, new)
 
-# Prove the absence of the old mutation surface in the resulting source.
 for forbidden in [
     'anvil_impersonateAccount',
+    'anvil_setBalance',
     'impersonatedTransfer(',
     'shockAmount',
     'usdtShocker',
