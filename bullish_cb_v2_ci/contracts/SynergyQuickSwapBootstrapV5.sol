@@ -82,7 +82,7 @@ contract SynergyQuickSwapBootstrapV5 {
             POLYGON_USDT,
             POLYGON_WPOL,
             address(newToken),
-            address(this)
+            admin_
         );
         newToken.setController(address(newController));
         usdt.forceApprove(address(newController), INITIAL_REQUIRED_USDT);
