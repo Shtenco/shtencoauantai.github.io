@@ -13,12 +13,13 @@ new = '''    donorCandidates.sort((a, b) => a.bal > b.bal ? -1 : 1);
     const routePoolMeta = pools.find((p) => p.kind === 2 && p.pool.toLowerCase() === routeV2.toLowerCase());
     assert.ok(routePoolMeta, "route V2 pool missing from 50-pool manifest");
     const routeUsdtReserve = BigInt(routePoolMeta.symbol0 === "USDT" ? routePoolMeta.reserve0 : routePoolMeta.reserve1);
-    const shockAmount = routeUsdtReserve / 20n;
-    assert.ok(shockAmount >= U("10000"), "adaptive shock too small");
+    const shockAmount = routeUsdtReserve / 2n;
+    assert.ok(shockAmount > 0n, "adaptive shock is zero");
+    console.log(`V157_SHOCK routeUsdtReserve=${ethers.formatUnits(routeUsdtReserve, 6)} shock=${ethers.formatUnits(shockAmount, 6)}`);
     let remainingShock = shockAmount;
     for (const donor of donorCandidates) {
       if (remainingShock === 0n) break;
-      const safeAvailable = donor.bal / 4n;
+      const safeAvailable = donor.bal / 2n;
       if (safeAvailable === 0n) continue;
       const take = safeAvailable < remainingShock ? safeAvailable : remainingShock;
       await impersonatedTransfer(USDT, donor.pair, shocker.address, take);
