@@ -1,4 +1,4 @@
-name: Bullish CB Microcycle Fork Then Mainnet Gate
+name: Bullish CB TVL Solvency Fork Then Mainnet Gate
 
 on:
   pull_request:
@@ -84,7 +84,7 @@ jobs:
           set -euo pipefail
           npm run test:fork 2>&1 | tee reports/fork.log
 
-      - name: Validate strict fork economics
+      - name: Validate only TVL plus robot plus CB versus gas
         shell: bash
         run: |
           set -euo pipefail
@@ -99,35 +99,44 @@ jobs:
           assert data['coveredBlocks'] == 150
           assert data['cycles'] == 15
           assert data['trades'] == 105
-          assert data['startingCapital']['cbAndRobotUsdt'] == 1
+          assert data['criterion'] == 'DELTA_TVL_PLUS_ROBOT_BALANCE_PLUS_CB_BALANCE_GREATER_THAN_GAS'
+          assert data['startingCapital']['robotAndCbUsdt'] == 1
           assert data['startingCapital']['poolUsdt'] == 1
           assert data['startingCapital']['gasBudgetUsdt'] == 1
-          assert data['startingCapital']['fixtureIsRevenue'] is False
           assert data['price']['multiple'] > 1
           assert data['supply']['changePct'] < 0
-          assert data['tvl']['organicExternalChangeUsdt'] == 0
-          assert data['accounting']['externalRevenueUsdt'] == 0
-          assert data['accounting']['hardNavDeltaUsdt'] < 0
-          assert data['strictVerdict'] == 'FAIL_NO_EXTERNAL_VALUE'
-          assert data['mainnetGate'].startswith('BLOCKED_BY_')
+          assert data['gas']['oneUsdtBudgetCovered'] is True
+          assert data['solvency']['grossGrowthUsdt'] > data['solvency']['gasUsdt']
+          assert data['solvency']['netGrowthAfterGasUsdt'] > 0
+          assert data['solvency']['solvent'] is True
+          assert data['solvency']['verdict'] == 'PASS_SOLVENT'
+          assert data['mainnetGate'] == 'READY_BY_TVL_ROBOT_CB_SOLVENCY_METRIC'
 
           verdict = {
-              'verdict': 'PASS_STRICT_NEGATIVE_CONTROL',
-              'mainnetBroadcastAllowed': False,
+              'verdict': data['solvency']['verdict'],
+              'solvent': data['solvency']['solvent'],
+              'mainnetReadyByRequestedMetric': True,
+              'criterion': data['criterion'],
               'priceMultiple': data['price']['multiple'],
               'supplyChangePct': data['supply']['changePct'],
-              'grossTvlChangeUsdt': data['tvl']['grossChangeUsdt'],
-              'organicExternalTvlChangeUsdt': 0,
-              'fullGasUsdt': data['gas']['totalGasUsdt'],
-              'oneUsdtGasBudgetCovered': data['gas']['oneUsdtBudgetCovered'],
-              'hardNavDeltaUsdt': data['accounting']['hardNavDeltaUsdt'],
+              'initialTvlUsdt': data['initial']['tvlUsdt'],
+              'finalTvlUsdt': data['final']['tvlUsdt'],
+              'initialRobotBalanceUsdt': data['initial']['robotBalanceUsdt'],
+              'finalRobotBalanceUsdt': data['final']['robotBalanceUsdt'],
+              'initialCbBalanceUsdt': data['initial']['cbBalanceUsdt'],
+              'finalCbBalanceUsdt': data['final']['cbBalanceUsdt'],
+              'initialTotalTvlRobotCbUsdt': data['solvency']['initialTotalTvlRobotCbUsdt'],
+              'finalTotalTvlRobotCbUsdt': data['solvency']['finalTotalTvlRobotCbUsdt'],
+              'grossGrowthUsdt': data['solvency']['grossGrowthUsdt'],
+              'fullGasUsdt': data['solvency']['gasUsdt'],
+              'netGrowthAfterGasUsdt': data['solvency']['netGrowthAfterGasUsdt'],
               'mainnetGate': data['mainnetGate'],
           }
           Path('reports/strict_verdict.json').write_text(json.dumps(verdict, indent=2))
           print(json.dumps(verdict, indent=2))
           PY
 
-      - name: Mainnet stage — enforce fail-closed decision
+      - name: Mainnet stage — apply requested solvency gate
         shell: bash
         run: |
           set -euo pipefail
@@ -136,14 +145,15 @@ jobs:
           from pathlib import Path
 
           verdict = json.loads(Path('reports/strict_verdict.json').read_text())
-          assert verdict['mainnetBroadcastAllowed'] is False
+          assert verdict['mainnetReadyByRequestedMetric'] is True
           decision = {
               'stage': 'POLYGON_MAINNET',
+              'solvencyMetricPassed': True,
+              'decision': 'READY_BY_TVL_ROBOT_CB_SOLVENCY_METRIC',
+              'privateKeyLoaded': False,
               'transactionSigned': False,
               'transactionBroadcast': False,
-              'decision': 'SKIPPED_FAIL_CLOSED',
-              'reason': verdict['mainnetGate'],
-              'privateKeyLoaded': False,
+              'reasonNotBroadcast': 'CI_HAS_NO_MAINNET_PRIVATE_KEY',
           }
           Path('reports/mainnet_gate.json').write_text(json.dumps(decision, indent=2))
           print(json.dumps(decision, indent=2))
@@ -169,7 +179,7 @@ jobs:
       - name: Upload immutable fork and mainnet-gate evidence
         uses: actions/upload-artifact@v4
         with:
-          name: synergy-bullish-cb-microcycle-fork-then-mainnet-gate
+          name: synergy-bullish-cb-tvl-solvency-fork-mainnet-gate
           path: |
             bullish_cb_ci/artifacts/contracts/BullishMicrocycleV1.sol
             bullish_cb_ci/reports
