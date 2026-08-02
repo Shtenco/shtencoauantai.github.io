@@ -95,7 +95,22 @@ jobs:
           cat reports/v16_anvil.log
           exit 1
 
-      - name: Execute V16 customer-paid gradient opportunity
+      - name: Inject one-run custom-error diagnostic
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('test/v16_gradient_opportunity_market_polygon_fork.js')
+          s = p.read_text()
+          needle = '''    const tx = await fx.engine.connect(fx.solverB).run(approval.epoch, plan, {\n      gasPrice: GAS_PRICE,\n      gasLimit: 15_000_000\n    });'''
+          replacement = '''    try {\n      await fx.engine.connect(fx.solverB).run.staticCall(approval.epoch, plan, { gasPrice: GAS_PRICE });\n      console.log("V16_POSITIVE_STATIC_CALL_PASS");\n    } catch (error) {\n      console.error("V16_POSITIVE_STATIC_DATA", error.data || error);\n      try { console.error("V16_POSITIVE_STATIC_PARSED", fx.engine.interface.parseError(error.data)); } catch (_) {}\n      throw error;\n    }\n    const tx = await fx.engine.connect(fx.solverB).run(approval.epoch, plan, {\n      gasPrice: GAS_PRICE,\n      gasLimit: 15_000_000\n    });'''
+          if needle not in s:
+              raise SystemExit('diagnostic injection target missing')
+          p.write_text(s.replace(needle, replacement, 1))
+          PY
+          node --check test/v16_gradient_opportunity_market_polygon_fork.js
+
+      - name: Execute V16 diagnostic fork replay
         shell: bash
         run: |
           set -euo pipefail
