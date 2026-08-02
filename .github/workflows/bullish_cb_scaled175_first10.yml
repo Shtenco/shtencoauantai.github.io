@@ -16,19 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  local-deploy-bundle:
+  local-deploy-artifact:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     defaults:
       run:
         working-directory: bullish_cb_v2_ci
-    env:
-      POLYGON_RPC_URL: https://polygon.drpc.org
-      DEPLOYER: 0x6946999DBCE63b140B1bB9D475F7c357130909E5
-      ROUTER: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
-      FACTORY: 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32
-      USDT: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F
-      WPOL: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,25 +29,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Compile V5 and build local bundle
+      - name: Compile V5 bootstrap artifact
         run: |
           set -euo pipefail
           npm install --no-audit --no-fund
-          npm install --no-save esbuild
           rm -f contracts/BullishQuickSwapDirectV4.sol
-          rm -rf artifacts cache bundle
+          rm -rf artifacts cache deploy-bundle
           npx hardhat compile --force
-          mkdir -p bundle
-          cp artifacts/contracts/SynergyQuickSwapBootstrapV5.sol/SynergyQuickSwapBootstrapV5.json bundle/
-          npx esbuild tools/synergy_local_signer.mjs --bundle --platform=node --format=cjs --outfile=bundle/synergy_local_signer.cjs
-          node tools/mainnet_preflight.mjs bundle/preflight.json
-          sha256sum bundle/* > bundle/SHA256SUMS
+          mkdir -p deploy-bundle
+          cp artifacts/contracts/SynergyQuickSwapBootstrapV5.sol/SynergyQuickSwapBootstrapV5.json deploy-bundle/
+          cp tools/synergy_local_signer.mjs deploy-bundle/
+          sha256sum deploy-bundle/* > deploy-bundle/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: synergy-v5-local-deploy-bundle
-          path: bullish_cb_v2_ci/bundle
+          name: synergy-v5-local-deploy-artifact
+          path: bullish_cb_v2_ci/deploy-bundle
           if-no-files-found: error
-          compression-level: 6
 
   scaled175-first10:
     runs-on: ubuntu-22.04
