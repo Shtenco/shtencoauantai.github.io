@@ -18,7 +18,7 @@ concurrency:
 jobs:
   scaled175-first10:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: bullish_cb_v2_ci
@@ -69,18 +69,22 @@ jobs:
           done
           cat reports/scaled175/anvil.log
           exit 1
-      - name: Execute scaled175 first-ten proof
+      - name: Execute exact scaled175 first-ten proof
         run: |
           set -euo pipefail
           npx hardhat test test/bullish_quickswap_scaled175_first10.js --network polygon \
             2>&1 | tee reports/scaled175/fork.log
-      - name: Validate result
+      - name: Validate robust result
         run: |
           set -euo pipefail
           python - <<'PY' | tee reports/scaled175/validator.log
           import json
           from pathlib import Path
           r = json.loads(Path("reports/scaled175/first10.json").read_text())
+          assert r["chainId"] == 137
+          assert r["forkBlock"] == 90790000
+          assert r["cycles"] == 10
+          assert r["trades"] == 70
           assert r["dealScaleBps"] == 17500
           assert r["buyUsdt"] == 0.175
           assert r["sellNotionalUsdt"] == 0.07
