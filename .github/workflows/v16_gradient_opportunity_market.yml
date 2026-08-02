@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "v8_graph_ci/v16_bundle.b64"
+      - "v8_graph_ci/v16_chunks/**"
       - "v8_graph_ci/scripts/build_v15_7_50_pool_manifest.js"
       - ".github/workflows/v16_gradient_opportunity_market.yml"
   workflow_dispatch:
@@ -52,7 +52,11 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           mkdir -p reports
-          base64 -d v16_bundle.b64 | tar -xz
+          cat v16_chunks/part* > /tmp/v16_bundle.b64
+          echo "7c73febc531e5730a14c460cd6f1202b34c100643cc705afbec0c615352c431c  /tmp/v16_bundle.b64" | sha256sum -c
+          base64 -d /tmp/v16_bundle.b64 > /tmp/v16_bundle.tar.gz
+          echo "35599d3e5b822e47862c15b12b59edeb269f2855bfd740b82a446c76028d5d50  /tmp/v16_bundle.tar.gz" | sha256sum -c
+          tar -xzf /tmp/v16_bundle.tar.gz
           node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v16_gradient_opportunity_market_polygon_fork.js
           python -m py_compile scripts/validate_v16_gradient_opportunity.py
