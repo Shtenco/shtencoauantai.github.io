@@ -16,6 +16,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  local-deploy-bundle:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      DEPLOYER: 0x6946999DBCE63b140B1bB9D475F7c357130909E5
+      ROUTER: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+      FACTORY: 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32
+      USDT: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F
+      WPOL: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Compile V5 and bundle offline signer
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm install --no-save esbuild
+          rm -f contracts/BullishQuickSwapDirectV4.sol
+          rm -rf artifacts cache bundle
+          npx hardhat compile --force
+          mkdir -p bundle
+          cp artifacts/contracts/SynergyQuickSwapBootstrapV5.sol/SynergyQuickSwapBootstrapV5.json bundle/
+          npx esbuild tools/synergy_local_signer.mjs --bundle --platform=node --format=cjs --outfile=bundle/synergy_local_signer.cjs
+      - name: Query live Polygon state
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { Contract, JsonRpcProvider, getAddress } from 'ethers';
+          const provider = new JsonRpcProvider(process.env.POLYGON_RPC_URL, 137, { staticNetwork: true });
+          const deployer = getAddress(process.env.DEPLOYER);
+          const routerAddress = getAddress(process.env.ROUTER);
+          const factoryAddress = getAddress(process.env.FACTORY);
+          const usdtAddress = getAddress(process.env.USDT);
+          const wpolAddress = getAddress(process.env.WPOL);
+          const network = await provider.getNetwork();
+          const block = await provider.getBlock('latest');
+          const [nonceLatest, noncePending, polBalance, feeData] = await Promise.all([
+            provider.getTransactionCount(deployer, 'latest'),
+            provider.getTransactionCount(deployer, 'pending'),
+            provider.getBalance(deployer),
+            provider.getFeeData(),
+          ]);
+          const usdt = new Contract(usdtAddress, ['function balanceOf(address) view returns(uint256)'], provider);
+          const router = new Contract(routerAddress, ['function factory() view returns(address)', 'function WETH() view returns(address)'], provider);
+          const [usdtBalance, routerFactory, routerWeth, routerCode, factoryCode, usdtCode, wpolCode] = await Promise.all([
+            usdt.balanceOf(deployer), router.factory(), router.WETH(),
+            provider.getCode(routerAddress), provider.getCode(factoryAddress), provider.getCode(usdtAddress), provider.getCode(wpolAddress),
+          ]);
+          const gasPrice = feeData.gasPrice ?? feeData.maxFeePerGas;
+          if (!block || !gasPrice) throw new Error('Missing live block or gas price');
+          const result = {
+            chainId: Number(network.chainId), blockNumber: block.number,
+            blockTimestamp: block.timestamp, blockGasLimit: block.gasLimit.toString(),
+            baseFeePerGasWei: (block.baseFeePerGas ?? 0n).toString(), gasPriceWei: gasPrice.toString(),
+            deployer, nonceLatest: nonceLatest.toString(), noncePending: noncePending.toString(),
+            polBalanceWei: polBalance.toString(), usdt: usdtAddress, usdtBalanceRaw: usdtBalance.toString(),
+            router: routerAddress, factory: factoryAddress, wpol: wpolAddress,
+            routerFactory: getAddress(routerFactory), routerWeth: getAddress(routerWeth),
+            routerCodeBytes: (routerCode.length - 2) / 2, factoryCodeBytes: (factoryCode.length - 2) / 2,
+            usdtCodeBytes: (usdtCode.length - 2) / 2, wpolCodeBytes: (wpolCode.length - 2) / 2,
+          };
+          if (result.chainId !== 137 || result.routerFactory !== factoryAddress || result.routerWeth !== wpolAddress) throw new Error('Polygon or QuickSwap binding mismatch');
+          if (Math.min(result.routerCodeBytes, result.factoryCodeBytes, result.usdtCodeBytes, result.wpolCodeBytes) <= 0) throw new Error('Missing contract code');
+          fs.writeFileSync('bundle/preflight.json', JSON.stringify(result, null, 2) + '\n');
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+          sha256sum bundle/* > bundle/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v5-local-deploy-bundle
+          path: bullish_cb_v2_ci/bundle
+          if-no-files-found: error
+          compression-level: 6
+
   scaled175-first10:
     runs-on: ubuntu-22.04
     timeout-minutes: 25
@@ -26,7 +109,6 @@ jobs:
       POLYGON_RPC_URL: https://polygon.drpc.org
       LOCAL_FORK_URL: http://127.0.0.1:8545
       FORK_BLOCK_NUMBER: "90790000"
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,21 +132,9 @@ jobs:
       - name: Start pinned Polygon fork
         run: |
           set -euo pipefail
-          anvil \
-            --fork-url "$POLYGON_RPC_URL" \
-            --fork-block-number "$FORK_BLOCK_NUMBER" \
-            --chain-id 137 \
-            --hardfork cancun \
-            --host 127.0.0.1 \
-            --port 8545 \
-            > reports/scaled175/anvil.log 2>&1 &
+          anvil --fork-url "$POLYGON_RPC_URL" --fork-block-number "$FORK_BLOCK_NUMBER" --chain-id 137 --hardfork cancun --host 127.0.0.1 --port 8545 > reports/scaled175/anvil.log 2>&1 &
           for i in $(seq 1 90); do
-            if curl -s "$LOCAL_FORK_URL" \
-              -H 'content-type: application/json' \
-              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
-              | grep -q '0x89'; then
-              exit 0
-            fi
+            if curl -s "$LOCAL_FORK_URL" -H 'content-type: application/json' --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' | grep -q '0x89'; then exit 0; fi
             sleep 1
           done
           cat reports/scaled175/anvil.log
@@ -72,41 +142,25 @@ jobs:
       - name: Execute exact scaled175 first-ten proof
         run: |
           set -euo pipefail
-          npx hardhat test test/bullish_quickswap_scaled175_first10.js --network polygon \
-            2>&1 | tee reports/scaled175/fork.log
+          npx hardhat test test/bullish_quickswap_scaled175_first10.js --network polygon 2>&1 | tee reports/scaled175/fork.log
       - name: Validate robust result
         run: |
           set -euo pipefail
           python - <<'PY' | tee reports/scaled175/validator.log
           import json
           from pathlib import Path
-          r = json.loads(Path("reports/scaled175/first10.json").read_text())
-          assert r["chainId"] == 137
-          assert r["forkBlock"] == 90790000
-          assert r["cycles"] == 10
-          assert r["trades"] == 70
-          assert r["dealScaleBps"] == 17500
-          assert r["buyUsdt"] == 0.175
-          assert r["sellNotionalUsdt"] == 0.07
-          assert r["netGrowthAfterGasUsdt"] > 0
-          assert r["gasCoverageMultiple"] >= 1.5
-          assert r["netAt150PctGasUsdt"] > 0
-          assert r["verdict"] == "PASS_ROBUST_POSITIVE_FIRST_10"
+          r = json.loads(Path('reports/scaled175/first10.json').read_text())
+          assert r['chainId'] == 137 and r['forkBlock'] == 90790000
+          assert r['cycles'] == 10 and r['trades'] == 70 and r['dealScaleBps'] == 17500
+          assert r['buyUsdt'] == 0.175 and r['sellNotionalUsdt'] == 0.07
+          assert r['netGrowthAfterGasUsdt'] > 0 and r['gasCoverageMultiple'] >= 1.5
+          assert r['netAt150PctGasUsdt'] > 0 and r['verdict'] == 'PASS_ROBUST_POSITIVE_FIRST_10'
           print(json.dumps(r, indent=2))
           PY
       - name: Bind evidence
         run: |
           set -euo pipefail
-          sha256sum \
-            contracts/RebaseSynaExactV3.sol \
-            contracts/BullishQuickSwapRefillV2.sol \
-            contracts/BullishQuickSwapScaled175.sol \
-            test/bullish_quickswap_scaled175_first10.js \
-            reports/scaled175/first10.json \
-            reports/scaled175/compile.log \
-            reports/scaled175/fork.log \
-            reports/scaled175/validator.log \
-            > reports/scaled175/sha256.txt
+          sha256sum contracts/RebaseSynaExactV3.sol contracts/BullishQuickSwapRefillV2.sol contracts/BullishQuickSwapScaled175.sol test/bullish_quickswap_scaled175_first10.js reports/scaled175/first10.json reports/scaled175/compile.log reports/scaled175/fork.log reports/scaled175/validator.log > reports/scaled175/sha256.txt
           sha256sum -c reports/scaled175/sha256.txt
       - uses: actions/upload-artifact@v4
         with:
