@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ci/bullish-cb-microcycle]
     paths:
-      - "bullish_cb_v2_ci/tools/synergy_local_signer.mjs"
+      - "bullish_cb_v2_ci/tools/**"
       - ".github/workflows/synergy_local_deploy_bundle.yml"
   workflow_dispatch:
 
