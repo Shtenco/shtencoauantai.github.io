@@ -43,7 +43,12 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           mkdir -p reports
-          node --check test/bullish_quickswap_refill_v2_polygon_fork.js
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('contracts/BullishQuickSwapDirectV4.sol')
+          p.write_text(p.read_text().replace('reference', 'referencePrice'))
+          PY
+          node --check test/bullish_quickswap_direct_v4_polygon_fork.js
           npx hardhat compile --force 2>&1 | tee reports/compile.log
       - name: Start pinned Polygon fork
         run: |
@@ -98,8 +103,9 @@ jobs:
         run: |
           set -euo pipefail
           sha256sum \
-            contracts/BullishQuickSwapRefillV2.sol \
-            test/bullish_quickswap_refill_v2_polygon_fork.js \
+            contracts/RebaseSynaExactV3.sol \
+            contracts/BullishQuickSwapDirectV4.sol \
+            test/bullish_quickswap_direct_v4_polygon_fork.js \
             reports/bullish_qs_v2_first10_fork.json \
             reports/bullish_qs_v2_refill_fork.json \
             reports/verdict.json \
@@ -111,9 +117,11 @@ jobs:
       - name: Upload immutable evidence
         uses: actions/upload-artifact@v4
         with:
-          name: bullish-qs-v2-refill-polygon-fork
+          name: bullish-qs-direct-v4-polygon-fork
           path: |
-            bullish_cb_v2_ci/artifacts/contracts/BullishQuickSwapRefillV2.sol
+            bullish_cb_v2_ci/contracts/RebaseSynaExactV3.sol
+            bullish_cb_v2_ci/contracts/BullishQuickSwapDirectV4.sol
+            bullish_cb_v2_ci/artifacts/contracts
             bullish_cb_v2_ci/reports
           if-no-files-found: error
           compression-level: 6
