@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "v8_graph_ci/v16_chunks/**"
+      - "v8_graph_ci/v16_test_chunks/**"
+      - "v8_graph_ci/v16_validator_chunks/**"
       - "v8_graph_ci/scripts/build_v15_7_50_pool_manifest.js"
       - ".github/workflows/v16_gradient_opportunity_market.yml"
   workflow_dispatch:
@@ -52,14 +54,14 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           mkdir -p reports
-          wc -c v16_chunks/part*
-          sha256sum v16_chunks/part*
           cat v16_chunks/part* > /tmp/v16_bundle.b64
           base64 -d /tmp/v16_bundle.b64 > /tmp/v16_bundle.tar.gz
           tar -xzf /tmp/v16_bundle.tar.gz
+          cat v16_test_chunks/part* | base64 -d | gzip -d > test/v16_gradient_opportunity_market_polygon_fork.js
+          cat v16_validator_chunks/part* | base64 -d | gzip -d > scripts/validate_v16_gradient_opportunity.py
           echo "5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5  contracts/v16/GradientOpportunityMarketV16.sol" | sha256sum -c
-          echo "bf54a589c773ffb6e87bb4555a28b4f5441841c258caba3ca14923db3d7f410a  test/v16_gradient_opportunity_market_polygon_fork.js" | sha256sum -c
-          echo "1d4bd7b36879b4ac59b5e219282bf3e2de154b9d96bdded8f2abcab5d61e8e34  scripts/validate_v16_gradient_opportunity.py" | sha256sum -c
+          echo "346277a4d4b255adb07acbb7d903db7a06fa2c5c5146dd5ccce058b4ec2bf94c  test/v16_gradient_opportunity_market_polygon_fork.js" | sha256sum -c
+          echo "7b018158bb529ed63733f97921ce1cfbca70fe3de2a110b39295fdee3231fa9a  scripts/validate_v16_gradient_opportunity.py" | sha256sum -c
           node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v16_gradient_opportunity_market_polygon_fork.js
           python -m py_compile scripts/validate_v16_gradient_opportunity.py
