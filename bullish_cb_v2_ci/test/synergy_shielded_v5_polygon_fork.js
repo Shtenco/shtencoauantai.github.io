@@ -195,7 +195,7 @@ describe("Synergy Coin Shielded V5", function () {
   });
 
   it("passes protected robot refill and exact POL refill", async function () {
-    const { bootstrap, controller } = fixture;
+    const { ownerAddress, bootstrap, controller } = fixture;
     await (await bootstrap.setRefillConfig(1_040_000n, 0, 100, 500, 10)).wait();
     const stateHash = await controller.currentExecutionStateHash();
     const block0 = await freshLatestBlock();
@@ -216,7 +216,7 @@ describe("Synergy Coin Shielded V5", function () {
     const maxUsdt = required * 10100n / 10000n + 1n;
     const routeState = await controller.currentGasRouteStateHash();
     const block1 = await freshLatestBlock();
-    const beforePol = await provider.getBalance(await bootstrap.getAddress());
+    const beforePol = await provider.getBalance(ownerAddress);
     await (await bootstrap.refillKeeperGasProtected(
       exactPol,
       maxUsdt,
@@ -227,6 +227,6 @@ describe("Synergy Coin Shielded V5", function () {
       { gasLimit: 3_000_000n }
     )).wait();
     assert((await controller.cumulativeGasRefillUsdt()) > 0n);
-    assert((await provider.getBalance(await bootstrap.getAddress())) > beforePol);
+    assert((await provider.getBalance(ownerAddress)) > beforePol);
   });
 });
