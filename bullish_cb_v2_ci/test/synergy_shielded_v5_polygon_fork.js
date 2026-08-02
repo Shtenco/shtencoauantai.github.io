@@ -217,7 +217,7 @@ describe("Synergy Coin Shielded V5", function () {
     const routeState = await controller.currentGasRouteStateHash();
     const block1 = await freshLatestBlock();
     const beforePol = await provider.getBalance(ownerAddress);
-    await (await bootstrap.refillKeeperGasProtected(
+    const gasReceipt = await (await bootstrap.refillKeeperGasProtected(
       exactPol,
       maxUsdt,
       routeState,
@@ -226,7 +226,8 @@ describe("Synergy Coin Shielded V5", function () {
       ethers.parseUnits("500", "gwei"),
       { gasLimit: 3_000_000n }
     )).wait();
+    const afterPol = await provider.getBalance(ownerAddress);
     assert((await controller.cumulativeGasRefillUsdt()) > 0n);
-    assert((await provider.getBalance(ownerAddress)) > beforePol);
+    assert.equal(afterPol + cost(gasReceipt), beforePol + exactPol);
   });
 });
