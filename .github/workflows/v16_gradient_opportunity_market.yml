@@ -52,11 +52,14 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           mkdir -p reports
+          wc -c v16_chunks/part*
+          sha256sum v16_chunks/part*
           cat v16_chunks/part* > /tmp/v16_bundle.b64
-          echo "7c73febc531e5730a14c460cd6f1202b34c100643cc705afbec0c615352c431c  /tmp/v16_bundle.b64" | sha256sum -c
           base64 -d /tmp/v16_bundle.b64 > /tmp/v16_bundle.tar.gz
-          echo "35599d3e5b822e47862c15b12b59edeb269f2855bfd740b82a446c76028d5d50  /tmp/v16_bundle.tar.gz" | sha256sum -c
           tar -xzf /tmp/v16_bundle.tar.gz
+          echo "5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5  contracts/v16/GradientOpportunityMarketV16.sol" | sha256sum -c
+          echo "bf54a589c773ffb6e87bb4555a28b4f5441841c258caba3ca14923db3d7f410a  test/v16_gradient_opportunity_market_polygon_fork.js" | sha256sum -c
+          echo "1d4bd7b36879b4ac59b5e219282bf3e2de154b9d96bdded8f2abcab5d61e8e34  scripts/validate_v16_gradient_opportunity.py" | sha256sum -c
           node --check scripts/build_v15_7_50_pool_manifest.js
           node --check test/v16_gradient_opportunity_market_polygon_fork.js
           python -m py_compile scripts/validate_v16_gradient_opportunity.py
