@@ -1,0 +1,16 @@
+{
+  "name": "synergy-bullish-cb-fork-proof",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "compile": "hardhat compile --force",
+    "test:fork": "hardhat test test/bullish_cb_microcycle_polygon_fork.js --network polygon"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "3.0.8",
+    "ethers": "6.17.0",
+    "hardhat": "2.22.19",
+    "solc": "0.8.26"
+  }
+}
