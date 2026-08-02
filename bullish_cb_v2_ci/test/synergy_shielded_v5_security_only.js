@@ -112,12 +112,14 @@ describe("Synergy Shielded V5 explicit security proof", function () {
     )).wait();
 
     const postAttackBlock = await freshLatestBlock();
+    await rpc("anvil_mine", ["0x1"]);
+    const executionBlock = await freshLatestBlock();
     await expectCallRevert(
       bootstrap.executeProtectedCycle.staticCall(
         committedNonce,
         committedState,
         postAttackBlock.hash,
-        postAttackBlock.timestamp + 60,
+        executionBlock.timestamp + 60,
         ethers.parseUnits("500", "gwei"),
         0
       ),
