@@ -1,0 +1,1 @@
+Temporary isolated CI input for SYNA V5.2 compile validation.
