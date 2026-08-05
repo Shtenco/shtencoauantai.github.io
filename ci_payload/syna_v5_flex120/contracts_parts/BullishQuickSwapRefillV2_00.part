@@ -1,0 +1,192 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import {SynergyError} from "./SynergyErrors.sol";
+
+interface IERC20QS {
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+interface IQuickSwapFactoryV2 {
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+}
+
+interface IQuickSwapPairV2 is IERC20QS {
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function sync() external;
+}
+
+interface IQuickSwapRouter02V2 {
+    function factory() external view returns (address);
+    function WETH() external view returns (address);
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 amountADesired,
+        uint256 amountBDesired,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
+
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapTokensForExactETH(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactETHForTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function getAmountsOut(uint256 amountIn, address[] calldata path)
+        external
+        view
+        returns (uint256[] memory amounts);
+
+    function getAmountsIn(uint256 amountOut, address[] calldata path)
+        external
+        view
+        returns (uint256[] memory amounts);
+}
+
+interface IRebaseSyna {
+    function mint(address to, uint256 amount) external returns (uint256 minted);
+    function burn(address from, uint256 amount) external returns (uint256 burned);
+    function globalRebaseDown(uint256 burnBps) external;
+    function balanceOf(address account) external view returns (uint256);
+    function totalSupply() external view returns (uint256);
+}
+
+library SafeTokenQS {
+    function safeTransfer(IERC20QS token, address to, uint256 amount) internal {
+        (bool ok, bytes memory data) = address(token).call(
+            abi.encodeWithSelector(token.transfer.selector, to, amount)
+        );
+        if (!(ok && (data.length == 0 || abi.decode(data, (bool))))) revert SynergyError(1077);
+    }
+
+    function safeTransferFrom(IERC20QS token, address from, address to, uint256 amount) internal {
+        (bool ok, bytes memory data) = address(token).call(
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount)
+        );
+        if (!(ok && (data.length == 0 || abi.decode(data, (bool))))) revert SynergyError(1078);
+    }
+
+    function forceApprove(IERC20QS token, address spender, uint256 amount) internal {
+        (bool ok, bytes memory data) = address(token).call(
+            abi.encodeWithSelector(token.approve.selector, spender, amount)
+        );
+        if (ok && (data.length == 0 || abi.decode(data, (bool)))) return;
+        (ok, data) = address(token).call(abi.encodeWithSelector(token.approve.selector, spender, 0));
+        if (!(ok && (data.length == 0 || abi.decode(data, (bool))))) revert SynergyError(1003);
+        (ok, data) = address(token).call(
+            abi.encodeWithSelector(token.approve.selector, spender, amount)
+        );
+        if (!(ok && (data.length == 0 || abi.decode(data, (bool))))) revert SynergyError(1002);
+    }
+}
+
+// RebaseSynaV2 was removed from the active source. The deployable token is
+// RebaseSynaExactV3 in its own contract file.
+
+contract BullishQuickSwapCentralBankV2 {
+    using SafeTokenQS for IERC20QS;
+
+    uint256 public constant MAX_FEE_BPS_LIMIT = 1_000;
+    uint256 public FEE_BPS = 30;
+    uint256 public constant TRIGGER_BPS = 100;
+    uint256 public constant MAX_BURN_BPS = 800;
+    uint256 public constant MAX_MINT_BPS = 400;
+    uint256 public constant SMA_WINDOW = 20;
+    uint256 public constant COOLDOWN_TRADES = 8;
+    uint256 public constant PRICE_SCALE = 1e30;
+    uint256 public constant MAX_SLIPPAGE_BPS_LIMIT = 300;
+    uint256 public constant MAX_LP_REFILL_BPS_LIMIT = 1_000;
+    uint256 public constant MAX_EXACT_GAS_REFILL_POL = 2 ether;
+
+    uint256 public minCycleUsdt = 100_000; // 0.1 USDT minimum
+
+    address public immutable owner;
+    IERC20QS public immutable usdt;
+    address public immutable wpol;
+    IRebaseSyna public immutable syna;
+    IQuickSwapRouter02V2 public immutable router;
+    IQuickSwapFactoryV2 public immutable factory;
+
+    IQuickSwapPairV2 public pair;
+    address public keeper;
+
+    uint256 public robotUsdt;
+    uint256 public treasuryUsdt;
+    uint256 public nonce;
+    uint256 public cooldown;
+    uint256 public priceSum;
+    uint256 public priceCursor;
+    uint256[20] public prices;
+
+    uint256 public robotTargetUsdt = 300_000;
+    uint256 public treasuryGasFloorUsdt = 20_000;
+    uint256 public maxSlippageBps = 100;
+    uint256 public maxLpRefillBps = 500;
+    uint256 public gasRefillCooldownBlocks = 100;
+    uint256 public lastGasRefillBlock;
+    uint256 public cumulativeGasRefillUsdt;
+
+    bool public initialized;
+    bool public paused;
+    uint256 private unlocked = 1;
+
+    event KeeperSet(address indexed keeper);
+    event Paused(address indexed caller, string reason);
+    event Unpaused(address indexed caller);
+    event CentralBankAction(string action, uint256 fractionBps, uint256 tokenAmount, uint256 usdtAmount);
+    event RobotRefill(string source, uint256 usdtAdded, uint256 tokenSpent, uint256 liquidityRemoved);
+    event FeeBpsUpdated(uint256 feeBps);
+
+    modifier onlyOwner() {
+        if (!(msg.sender == owner)) revert SynergyError(1052);
+        _;
+    }
+
+    mod
