@@ -1,0 +1,1 @@
+Temporary isolated compile validation for SYNA V5.2. No secrets and no deployment.
