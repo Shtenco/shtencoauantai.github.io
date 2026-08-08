@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SINERGY Financial OS — Audit Architecture V2</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07110d;--panel:#0d1b15;--line:#244a37;--text:#eefaf2;--muted:#a9c7b5;--accent:#67f5a8}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top,#123321 0,#07110d 46%);color:var(--text);font:16px/1.55 Inter,system-ui,sans-serif}
+    main{max-width:1120px;margin:auto;padding:64px 24px 96px} h1{font-size:clamp(38px,7vw,78px);line-height:.98;margin:0 0 20px;letter-spacing:-.04em}
+    h2{font-size:26px;margin:0 0 12px}.eyebrow{color:var(--accent);font-weight:800;letter-spacing:.16em;text-transform:uppercase}.lead{max-width:850px;color:var(--muted);font-size:20px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:36px 0}.card{background:rgba(13,27,21,.86);border:1px solid var(--line);border-radius:18px;padding:22px}
+    code{color:var(--accent)} .flow{padding:24px;border:1px solid var(--line);border-radius:18px;background:#09150f;overflow:auto;white-space:pre;color:#dff8e9}
+    .metric{font-size:28px;font-weight:800;color:var(--accent)} .note{border-left:3px solid var(--accent);padding-left:18px;color:var(--muted)}
+    footer{margin-top:54px;color:var(--muted);font-size:14px} a{color:var(--accent)}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">SINERGY · Financial OS · Audit V2</div>
+  <h1>Сначала бухгалтерская истина.<br>Потом денежная политика.</h1>
+  <p class="lead">Новая исследовательская архитектура отделяет внешний капитал от внутренней переоценки. HardNAV, ликвидность, кредит и платёжные маршруты выводятся из проверяемого состояния, а не из цены собственного токена.</p>
+
+  <div class="flow">External settlement / performing claim
+        ↓
+Canonical Double-Entry Ledger
+        ↓
+FinancialSnapshot V2 + SHA-256 digest
+        ↓
+100-week maturity / LCR 1w · 4w · 8w
+        ↓
+Monetary Constitution → bounded AI-CB
+        ↓
+Savings · P2P · Productive QE/QT · Insurance · MIDAS
+        ↓
+MetaPay RFQ → Prefund/NDC reservation → ExecutionPlan
+        ↓
+Reconciliation → next ledger state</div>
+
+  <div class="grid">
+    <section class="card"><div class="metric">3 NAV</div><h2>Hard / Liquid / Economic</h2><p>Собственный market cap, mint, burn и virtual TVL не увеличивают внешний капитал системы.</p></section>
+    <section class="card"><div class="metric">100 недель</div><h2>Unlock curve</h2><p>Snapshot содержит будущие maturity buckets и LCR, чтобы вестинг был реальным liquidity constraint.</p></section>
+    <section class="card"><div class="metric">RFQ</div><h2>Цена ≠ ликвидность</h2><p>Лучший bid не проходит, если FXP/provider не имеет подтверждённого prefund и Net Debit Cap.</p></section>
+    <section class="card"><div class="metric">0</div><h2>Unbacked primary mint</h2><p>Productive credit ограничен verified output, reserve capacity, liquidity capacity и risk capacity.</p></section>
+  </div>
+
+  <h2>Stress-first simulation</h2>
+  <p>Единый исследовательский runner рассчитан на 100, 250 и 500 циклов. Он одновременно моделирует добровольные накопления 2–5%, duration-matched P2P, productive temporary money и QT, credit losses, страховой waterfall, ограниченный MIDAS sleeve, MetaPay clearing и режимы AI-CB.</p>
+  <p class="note">Результат симуляции не является прогнозом доходности. Критерий успеха — conservation, solvency, liquidity, external realised value и корректное поведение при default/oracle/bridge/MIDAS stress.</p>
+
+  <h2>Что не считается резервом</h2>
+  <p>Внутренняя DAO-единица не становится иностранным резервом от деления на FX-курс. Облигация собственного казначейства на балансе собственного консолидированного ЦБ не создаёт внешнее net wealth. Oracle claim не становится активом до независимой верификации и settlement/reconciliation.</p>
+
+  <footer>Standalone feature-branch research page. Existing root site and legacy pages are not modified.</footer>
+</main></body></html>
