@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SINERGY Financial OS — Money, Reserve, Capital</title>
+<meta name="description" content="SINERGY Financial OS: programmable money, savings, productive credit, MetaPay and bounded AI monetary policy.">
+<style>
+:root{--bg:#030504;--bg2:#0b100d;--g:#00ef76;--gold:#edc267;--txt:#f4f6f4;--muted:#9aa69e;--line:#1c3024;--red:#ff6e65}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:linear-gradient(180deg,#020302,var(--bg2) 55%,#020302);color:var(--txt);font-family:Inter,Arial,sans-serif;line-height:1.55}
+a{color:inherit}.wrap{max-width:1280px;margin:auto;padding:0 24px}.nav{position:sticky;top:0;z-index:5;background:rgba(3,5,4,.9);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.navin{height:70px;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:900;letter-spacing:.1em}.brand b{color:var(--g)}.nav a{text-decoration:none;color:var(--muted);font-size:13px;margin-left:24px}.nav a:hover{color:var(--g)}
+.hero{padding:100px 0 70px;position:relative}.tag{font:700 12px ui-monospace,monospace;color:var(--g);letter-spacing:.16em}.hero h1{font-size:clamp(52px,9vw,118px);line-height:.84;letter-spacing:-.055em;margin:20px 0 30px;max-width:1120px}.hero h1 em{font-style:normal;color:var(--g)}.hero p{max-width:850px;color:#c6cec8;font-size:20px}.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px}.chip{border:1px solid var(--line);padding:10px 13px;border-radius:999px;color:var(--muted);font:12px ui-monospace,monospace}
+section{padding:70px 0;border-top:1px solid var(--line)}h2{font-size:clamp(34px,5vw,62px);line-height:1;margin:0 0 28px}.sub{color:var(--muted);max-width:820px;margin-bottom:34px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{grid-column:span 4;padding:24px;background:rgba(9,14,11,.72);border:1px solid var(--line);border-radius:18px}.card h3{font-size:28px;margin:4px 0 10px}.card p{color:var(--muted)}.ey{font:700 11px ui-monospace,monospace;color:var(--g);letter-spacing:.12em}.gold{color:var(--gold)}
+.wide{grid-column:span 6}.full{grid-column:span 12}.metric{font-size:42px;font-weight:900}.formula{padding:24px;border:1px solid var(--line);background:#060906;border-radius:16px;font:16px/1.8 ui-monospace,monospace;overflow:auto}.flow{white-space:pre-wrap;color:#dce3de}.bad{border-color:#51332f}.bad .ey{color:var(--red)}.bad h3{color:#ffae9f}
+.rails{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px}.railbox{padding:20px;border:1px solid var(--line);border-radius:16px}.arrow{font-size:34px;color:var(--g)}.status{display:inline-flex;border:1px solid var(--gold);color:var(--gold);padding:8px 12px;border-radius:999px;font:700 11px ui-monospace,monospace}
+footer{padding:46px 0 70px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}@media(max-width:820px){.card,.wide,.full{grid-column:span 12}.navlinks{display:none}.rails{grid-template-columns:1fr}.arrow{transform:rotate(90deg);text-align:center}}
+</style>
+</head>
+<body>
+<header class="nav"><div class="wrap navin"><div class="brand">SHTENCO / <b>SINERGY</b></div><nav class="navlinks"><a href="#money">Деньги</a><a href="#savings">Накопления</a><a href="#metapay">MetaPay</a><a href="#ai">AI-ЦБ</a></nav></div></header>
+<main>
+<div class="wrap hero"><div class="tag">FINANCIAL OPERATING SYSTEM / RESEARCH ARCHITECTURE</div><h1>НЕ ОДИН ТОКЕН. <em>ЦЕЛАЯ ДЕНЕЖНАЯ СИСТЕМА.</em></h1><p>SINERGY разделяет капитал, резерв, расчётные деньги и кредит. Сбережения получают срок, кредит — источник погашения, прибыль — строгий внешний источник, а AI действует только внутри математической денежной конституции.</p><div class="chips"><span class="chip">HardNAV</span><span class="chip">SYNA / SYNR / SYNT</span><span class="chip">2–5% savings</span><span class="chip">1–100 week duration</span><span class="chip">P2P / productive credit</span><span class="chip">fiat ↔ CBDC ↔ crypto</span></div></div>
+
+<section id="money"><div class="wrap"><div class="tag">01 / MONETARY CORE</div><h2>CAPITAL ≠ RESERVE ≠ MONEY</h2><p class="sub">Одна из главных ошибок токеномики — заставлять один актив одновременно быть стабильными деньгами, инвестиционным капиталом и резервом. В SINERGY эти функции разделены.</p><div class="grid">
+<div class="card"><div class="ey">SYNA</div><h3>Капитал</h3><p>Equity, governance, junior risk и upside реальной экосистемы. Рыночная цена допустимо волатильна.</p></div>
+<div class="card"><div class="ey gold">SYNR</div><h3>Резерв</h3><p>Basket reserve, savings capital, страховой и collateral слой. Оценивается по haircut-NAV.</p></div>
+<div class="card"><div class="ey">SYNT</div><h3>Деньги</h3><p>Платежи, зарплаты, unit of account и кредитные расчёты. Стабильность важнее спекулятивного роста.</p></div>
+<div class="card full"><div class="ey">PUBLIC TRUTH</div><div class="metric">HardNAV</div><div class="formula">HardNAV = external redeemable assets − external liabilities
+DistributableProfit = max(0, HardNAVₜ − HardNAVₜ₋₁ − NetNewCapitalₜ)</div></div>
+</div></div></section>
+
+<section id="savings"><div class="wrap"><div class="tag">02 / SAVINGS & CREDIT</div><h2>ДЕНЬГИ ПОЛУЧАЮТ СРОК.</h2><div class="grid"><div class="card wide"><div class="ey">DURATION MARKET</div><div class="flow formula">Доход
+  ↓ 2–5%
+накопления
+  ↓
+вестинг 1…100 недель
+  ↓
+известная кривая будущих unlock
+  ↓
+P2P / productive credit
+  ↓
+loan maturity &lt; funding maturity</div></div><div class="card wide"><div class="ey">REALIZED PROFIT</div><h3>Reward не минтится из воздуха</h3><p>Проценты заёмщиков, платежные комиссии, SaaS, внешняя торговая прибыль и другие внешние доходы сначала попадают в консолидированный баланс. Только затем работает waterfall для вкладчиков, insurance, reserve и buyback.</p><span class="status">NO GUARANTEED YIELD</span></div></div></div></section>
+
+<section id="metapay"><div class="wrap"><div class="tag">03 / METAPAY</div><h2>ОДИН INTENT — МНОГО ДЕНЕЖНЫХ РЕЛЬСОВ.</h2><p class="sub">Пользователь должен указывать экономический результат, а не выбирать сеть, bridge и gas token. MetaPay маршрутизирует через разрешённые bank, CBDC и crypto rails.</p><div class="rails"><div class="railbox"><b>Источник</b><p>KZT bank · card · CBDC · USDC · BTC/LN · SYNT</p></div><div class="arrow">→</div><div class="railbox"><b>MetaPay Router</b><p>quotes · compliance · risk · FX · netting · settlement</p></div></div><div class="rails" style="margin-top:18px"><div class="railbox"><b>Open boundaries</b><p>ISO 20022 / Mojaloop · Interledger/Rafiki · CBDC API façade · Hyperledger Cacti</p></div><div class="arrow">→</div><div class="railbox"><b>Получатель</b><p>получает нужный ему актив по разрешённому маршруту</p></div></div></div></section>
+
+<section id="ai"><div class="wrap"><div class="tag">04 / AI CENTRAL BANK</div><h2>ИИ НЕ ПОЛУЧАЕТ ВЛАСТЬ НАД КОНСТИТУЦИЕЙ.</h2><div class="grid"><div class="card wide"><div class="ey">POLICY STACK</div><div class="flow formula">Monetary Constitution
+        ↓
+Deterministic baseline
+        ↓
+Bounded RL residual
+        ↓
+Safety shield
+        ↓
+GROWTH / NORMAL / DEFENSE / EMERGENCY</div></div><div class="card wide"><div class="ey">HARD INVARIANTS</div><p>HardNAV coverage, liquidity floor, zero unbacked mint, loan maturity shorter than funding maturity, zero flash debt at commit, MIDAS risk cap and profit-only buyback.</p></div><div class="card full bad"><div class="ey">NOT PROFIT</div><h3>MINT · SELF-TOKEN MCAP · VIRTUAL TVL · INTERNAL PRICE MARKS</h3><p>Рост внутренней котировки не создаёт внешние активы. Финансовая ОС признаёт прибыль только после изменения консолидированного внешнего баланса.</p></div></div></div></section>
+</main>
+<footer><div class="wrap">Research / architecture prototype. Не является обещанием доходности, депозитным продуктом или заявлением о доступности конкретных банковских/CBDC рельсов. Live-интеграции требуют соответствующих провайдеров, разрешений и compliance.</div></footer>
+</body>
+</html>
