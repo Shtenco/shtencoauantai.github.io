@@ -1,0 +1,136 @@
+name: Bullish CB Scaled150 Confirmation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_v2_ci/**"
+      - ".github/workflows/bullish_cb_scaled150_confirm.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bullish-scaled150-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-scaled150-confirm:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: bullish_cb_v2_ci
+    env:
+      POLYGON_RPC_URL: https://polygon.drpc.org
+      LOCAL_FORK_URL: http://127.0.0.1:8545
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Exact compile
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          rm -f contracts/BullishQuickSwapDirectV4.sol
+          rm -rf artifacts cache
+          mkdir -p reports/scaled150
+          node --check test/bullish_quickswap_scaled150_confirm.js
+          npx hardhat compile --force 2>&1 | tee reports/scaled150/compile.log
+
+      - name: Start fresh pinned Polygon fork
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/scaled150/anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/scaled150/anvil.log
+          exit 1
+
+      - name: Confirm first ten and both refills
+        run: |
+          set -euo pipefail
+          npx hardhat test test/bullish_quickswap_scaled150_confirm.js --network polygon \
+            2>&1 | tee reports/scaled150/fork.log
+
+      - name: Validate robust result
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee reports/scaled150/validator.log
+          import json
+          from pathlib import Path
+
+          first = json.loads(Path("reports/scaled150/first10.json").read_text())
+          refills = json.loads(Path("reports/scaled150/refills.json").read_text())
+          assert first["chainId"] == 137
+          assert first["forkBlock"] == 90790000
+          assert first["dealScaleBps"] == 15000
+          assert first["buyUsdt"] == 0.15
+          assert first["sellNotionalUsdt"] == 0.06
+          assert first["netGrowthAfterGasUsdt"] > 0
+          assert first["gasCoverageMultiple"] >= 1.5
+          assert first["netAt150PctGasUsdt"] > 0
+          assert first["verdict"] == "PASS_ROBUST_POSITIVE_FIRST_10"
+          assert refills["robotRefillEvents"] > 0
+          assert refills["gasRefillEvents"] == 1
+          assert refills["verdict"] == "PASS_BOUNDED_ROBOT_AND_EXACT_GAS_REFILL"
+          summary = {
+              "first10": first,
+              "refills": refills,
+              "mainnetAuthorized": False,
+              "privateKeyLoaded": False,
+              "transactionBroadcast": False,
+          }
+          Path("reports/scaled150/verdict.json").write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Bind evidence
+        run: |
+          set -euo pipefail
+          sha256sum \
+            contracts/RebaseSynaExactV3.sol \
+            contracts/BullishQuickSwapRefillV2.sol \
+            contracts/BullishQuickSwapScaled150.sol \
+            test/bullish_quickswap_scaled150_confirm.js \
+            reports/scaled150/first10.json \
+            reports/scaled150/refills.json \
+            reports/scaled150/verdict.json \
+            reports/scaled150/compile.log \
+            reports/scaled150/fork.log \
+            reports/scaled150/validator.log \
+            > reports/scaled150/sha256.txt
+          sha256sum -c reports/scaled150/sha256.txt
+
+      - name: Upload immutable confirmation
+        uses: actions/upload-artifact@v4
+        with:
+          name: bullish-scaled150-polygon-confirmation
+          path: bullish_cb_v2_ci/reports/scaled150
+          if-no-files-found: error
+          compression-level: 6

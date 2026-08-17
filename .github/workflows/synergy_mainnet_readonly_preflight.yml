@@ -1,0 +1,68 @@
+name: SYNA Polygon Mainnet Readonly Preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/synergy_mainnet_readonly_preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mainnet-preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      RPC: https://polygon.drpc.org
+      DEPLOYER: 0x6946999DBCE63b140B1bB9D475F7c357130909E5
+      ROUTER: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
+      FACTORY: 0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32
+      USDT: 0xc2132D05D31c914a87C6611C10748AaCB58e8F
+      WPOL: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+      - name: Query Polygon mainnet
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/mainnet-preflight
+          python - <<'PY' | tee reports/mainnet-preflight/result.json
+          import json, os, urllib.request
+          rpc_url=os.environ['RPC']
+          def rpc(method, params):
+              body=json.dumps({'jsonrpc':'2.0','id':1,'method':method,'params':params}).encode()
+              req=urllib.request.Request(rpc_url,data=body,headers={'Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=30) as r: out=json.load(r)
+              if 'error' in out: raise RuntimeError(out['error'])
+              return out['result']
+          def code_bytes(addr): return (len(rpc('eth_getCode',[addr,'latest']))-2)//2
+          def call_addr(to, selector): return '0x'+rpc('eth_call',[{'to':to,'data':selector},'latest'])[-40:]
+          deployer=os.environ['DEPLOYER']
+          bal_wei=int(rpc('eth_getBalance',[deployer,'latest']),16)
+          result={
+            'chainId':int(rpc('eth_chainId',[]),16),
+            'blockNumber':int(rpc('eth_blockNumber',[]),16),
+            'deployer':deployer,
+            'deployerPol':bal_wei/10**18,
+            'routerCodeBytes':code_bytes(os.environ['ROUTER']),
+            'factoryCodeBytes':code_bytes(os.environ['FACTORY']),
+            'usdtCodeBytes':code_bytes(os.environ['USDT']),
+            'wpolCodeBytes':code_bytes(os.environ['WPOL']),
+            'routerFactory':call_addr(os.environ['ROUTER'],'0xc45a0155'),
+            'routerWeth':call_addr(os.environ['ROUTER'],'0xad5c4648'),
+          }
+          result['routerFactoryMatches']=result['routerFactory'].lower()==os.environ['FACTORY'].lower()
+          result['routerWethMatches']=result['routerWeth'].lower()==os.environ['WPOL'].lower()
+          result['readyForReadOnlyPreflight']=(result['chainId']==137 and result['routerFactoryMatches'] and result['routerWethMatches'] and min(result['routerCodeBytes'],result['factoryCodeBytes'],result['usdtCodeBytes'],result['wpolCodeBytes'])>0)
+          print(json.dumps(result,indent=2))
+          assert result['readyForReadOnlyPreflight']
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syna-polygon-mainnet-readonly-preflight
+          path: reports/mainnet-preflight/result.json
+          if-no-files-found: error

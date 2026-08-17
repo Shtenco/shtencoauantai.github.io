@@ -1,0 +1,137 @@
+name: Bullish CB Polygon Fork Grid
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bullish_cb_ci/**"
+      - ".github/workflows/bullish_cb_microcycle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bullish-cb-grid-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  polygon-fork-grid:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: bullish_cb_ci
+    env:
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      LOCAL_FORK_URL: "http://127.0.0.1:8545"
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/bullish-cb-microcycle
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install and compile exact sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          mkdir -p reports
+          node --check test/bullish_cb_microcycle_polygon_fork_grid.js
+          npx hardhat compile --force 2>&1 | tee reports/compile_grid.log
+
+      - name: Start pinned Polygon archive fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/anvil_grid.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/anvil_grid.log
+          exit 1
+
+      - name: Execute cumulative 15 50 100 250 500 grid
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:grid 2>&1 | tee reports/fork_grid.log
+
+      - name: Validate and print grid
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee reports/grid_validator.log
+          import json
+          from pathlib import Path
+
+          p = Path('reports/bullish_cb_microcycle_polygon_fork_grid.json')
+          data = json.loads(p.read_text())
+          assert data['chainId'] == 137
+          assert data['forkBlockConfigured'] == 90790000
+          assert data['criterion'] == 'DELTA_TVL_PLUS_ROBOT_BALANCE_PLUS_CB_BALANCE_GREATER_THAN_GAS'
+          assert data['checkpointsRequested'] == [15, 50, 100, 250, 500]
+          assert any(row['cycles'] == 15 for row in data['grid'])
+          summary = {
+              'scenario': data['scenario'],
+              'completedCycles': data['completedCycles'],
+              'stoppedEarly': data['stoppedEarly'],
+              'missingCheckpoints': data['missingCheckpoints'],
+              'bestCheckpointByGasCoverage': data['bestCheckpointByGasCoverage'],
+              'grid': data['grid'],
+          }
+          Path('reports/grid_verdict.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Bind evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            contracts/BullishMicrocycleV1.sol \
+            test/bullish_cb_microcycle_polygon_fork_grid.js \
+            reports/bullish_cb_microcycle_polygon_fork_grid.json \
+            reports/grid_verdict.json \
+            reports/compile_grid.log \
+            reports/fork_grid.log \
+            reports/grid_validator.log \
+            > reports/grid_sha256.txt
+          sha256sum -c reports/grid_sha256.txt
+
+      - name: Upload immutable grid evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-bullish-cb-polygon-fork-grid
+          path: |
+            bullish_cb_ci/artifacts/contracts/BullishMicrocycleV1.sol
+            bullish_cb_ci/reports
+          if-no-files-found: error
+          compression-level: 6
