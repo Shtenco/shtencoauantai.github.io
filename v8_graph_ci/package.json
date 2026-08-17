@@ -1,0 +1,18 @@
+{
+  "name": "synergy-v8-graph-recovery-evidence",
+  "version": "15.6.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "compile": "hardhat compile --force",
+    "test:v8": "node scripts/prepare_recovery_test.js && hardhat test test/stateful_v8_recovery_polygon_fork.js --network polygonFork",
+    "validate": "python scripts/validate_recovered_v8.py"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "3.0.8",
+    "@openzeppelin/contracts": "5.6.1",
+    "ethers": "6.17.0",
+    "hardhat": "2.22.19",
+    "solc": "0.8.26"
+  }
+}

@@ -1,0 +1,153 @@
+name: V15.8 Natural Aave 50-Pool QE QT
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "v8_graph_ci/contracts/v15_7/**"
+      - "v8_graph_ci/test/v15_7_aave_50_pool_qe_qt_polygon_fork.js"
+      - "v8_graph_ci/scripts/build_v15_7_50_pool_manifest.js"
+      - "v8_graph_ci/scripts/scan_v15_8_natural_blocks.js"
+      - "v8_graph_ci/scripts/patch_v15_7_token_addresses.py"
+      - "v8_graph_ci/scripts/patch_v15_7_manifest_test.py"
+      - "v8_graph_ci/scripts/patch_v15_7_adaptive_shock.py"
+      - "v8_graph_ci/scripts/patch_v15_8_no_shock_dynamic_flash.py"
+      - "v8_graph_ci/scripts/validate_v15_8.py"
+      - ".github/workflows/v15_7_aave_50_pool.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v15-8-natural-aave-50-pool-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove-natural-real-aave-50-pool:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: v8_graph_ci
+    env:
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      LOCAL_FORK_URL: "http://127.0.0.1:8545"
+      FORK_BLOCK_NUMBER: "90790000"
+      SCAN_START_BLOCK: "89290000"
+      SCAN_END_BLOCK: "90790000"
+      SCAN_COARSE_STEP: "10000"
+      SCAN_REFINE_RADIUS: "12000"
+      SCAN_REFINE_STEP: "500"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/v15-8-natural-aave-50-pool
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install compile and remove shock surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          mkdir -p reports
+          python scripts/patch_v15_7_token_addresses.py
+          python scripts/patch_v15_7_manifest_test.py
+          python scripts/patch_v15_7_adaptive_shock.py
+          python scripts/patch_v15_8_no_shock_dynamic_flash.py
+          node --check scripts/build_v15_7_50_pool_manifest.js
+          node --check scripts/scan_v15_8_natural_blocks.js
+          node --check test/v15_7_aave_50_pool_qe_qt_polygon_fork.js
+          python -m py_compile scripts/patch_v15_8_no_shock_dynamic_flash.py scripts/validate_v15_8.py
+          ! grep -Eq 'anvil_impersonateAccount|anvil_setBalance|shockAmount|usdtShocker' test/v15_7_aave_50_pool_qe_qt_polygon_fork.js
+          npx hardhat compile --force 2>&1 | tee reports/v15_8_compile.log
+
+      - name: Scan unmodified Polygon history for natural edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/scan_v15_8_natural_blocks.js 2>&1 | tee reports/v15_8_natural_block_scan.log
+          grep '^SELECTED_BLOCK=' reports/v15_8_natural_block_scan.log | tail -1 >> "$GITHUB_ENV"
+          test -s reports/v15_8_natural_block_scan.json
+
+      - name: Build selected historical 50-pool graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FORK_BLOCK_NUMBER="$SELECTED_BLOCK"
+          echo "FORK_BLOCK_NUMBER=$SELECTED_BLOCK" >> "$GITHUB_ENV"
+          node scripts/build_v15_7_50_pool_manifest.js \
+            2>&1 | tee reports/v15_8_50_pool_manifest.log
+          test -s reports/v15_7_50_pool_manifest.json
+
+      - name: Start unmodified selected Polygon fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/v15_8_anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/v15_8_anvil.log
+          exit 1
+
+      - name: Execute natural real Aave selected route
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx hardhat test test/v15_7_aave_50_pool_qe_qt_polygon_fork.js \
+            --network polygonFork \
+            2>&1 | tee reports/v15_8_fork.log
+
+      - name: Fail-closed natural-edge validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate_v15_8.py 2>&1 | tee reports/v15_8_validator.log
+          grep -q '"verdict": "PASS"' reports/v15_8_verdict.json
+
+      - name: Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          find artifacts/contracts/v15_7 reports -type f ! -name v15_8_sha256.txt \
+            -print0 | sort -z | xargs -0 sha256sum > reports/v15_8_sha256.txt
+          sha256sum -c reports/v15_8_sha256.txt
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v15-8-natural-real-aave-50-pool-qe-qt
+          path: |
+            v8_graph_ci/artifacts/contracts/v15_7
+            v8_graph_ci/reports/v15_7_50_pool_manifest.json
+            v8_graph_ci/reports/v15_7_real_aave_50_pool_qe_qt.json
+            v8_graph_ci/reports/v15_8_*
+          if-no-files-found: error
+          compression-level: 6

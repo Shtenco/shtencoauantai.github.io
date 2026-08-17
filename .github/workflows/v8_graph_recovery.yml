@@ -1,0 +1,125 @@
+name: V8 V11 Recovered Profitable Polygon Graph Fork
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "v8_graph_ci/**"
+      - ".github/workflows/v8_graph_recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v8-v11-graph-recovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovered-positive-graph:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: v8_graph_ci
+    env:
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      LOCAL_FORK_URL: "http://127.0.0.1:8545"
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/v8-graph-recovery
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install exact dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Compile exact V11 and V8 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          npm run compile 2>&1 | tee reports/stateful_v8_recovery_compile.log
+          node scripts/build_recovery_manifest.js \
+            2>&1 | tee reports/stateful_v8_recovery_compile_manifest.log
+
+      - name: Prove pinned Polygon historical state
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl -sS "$POLYGON_RPC_URL" \
+            -H 'content-type: application/json' \
+            --data '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["0x5695870",false],"id":1}')
+          echo "$response" | tee reports/stateful_v8_recovery_archive_preflight.log
+          echo "$response" | grep -q '0x5695870'
+
+      - name: Start pinned Polygon archive fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/stateful_v8_recovery_anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/stateful_v8_recovery_anvil.log
+          exit 1
+
+      - name: Execute recovered profitable QE graph buyback QT cycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:v8 2>&1 | tee reports/stateful_v8_recovery_polygon_fork.log
+
+      - name: Validate recovered graph accounting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run validate 2>&1 | tee reports/stateful_v8_recovery_validator.log
+          grep -q '"verdict": "PASS"' reports/stateful_v8_recovery_verdict.json
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          find artifacts/contracts reports \
+            -type f ! -name 'stateful_v8_recovery_sha256.txt' \
+            -print0 | sort -z | xargs -0 sha256sum \
+            > reports/stateful_v8_recovery_sha256.txt
+          sha256sum -c reports/stateful_v8_recovery_sha256.txt
+
+      - name: Upload immutable recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v8-v11-recovered-profitable-polygon-graph
+          path: |
+            v8_graph_ci/artifacts/contracts
+            v8_graph_ci/reports/stateful_v8_recovery_*
+          if-no-files-found: error
+          compression-level: 6

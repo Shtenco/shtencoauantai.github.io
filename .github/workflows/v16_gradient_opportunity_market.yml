@@ -1,0 +1,129 @@
+name: V16 Gradient Opportunity Market Fork
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "v8_graph_ci/v16_exact_bundle.tar.gz"
+      - "v8_graph_ci/scripts/build_v15_7_50_pool_manifest.js"
+      - ".github/workflows/v16_gradient_opportunity_market.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v16-gradient-opportunity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove-v16-structural-economics:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: v8_graph_ci
+    env:
+      POLYGON_RPC_URL: "https://polygon.drpc.org"
+      LOCAL_FORK_URL: "http://127.0.0.1:8545"
+      FORK_BLOCK_NUMBER: "90790000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/v16-gradient-opportunity-market
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install and compile exact V16 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          mkdir -p reports
+          echo "f4501a66023b6e6c177b213aa8c2f4671ed0f1a7f247c0898fa199b6d0c76dd6  v16_exact_bundle.tar.gz" | sha256sum -c
+          tar -xzf v16_exact_bundle.tar.gz
+          echo "5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5  contracts/v16/GradientOpportunityMarketV16.sol" | sha256sum -c
+          echo "f776a138707192b1f4679aaea785ccbafa096036773c31a36a038df7c71c2e36  test/v16_gradient_opportunity_market_polygon_fork.js" | sha256sum -c
+          echo "b1c0daec7ce318d1724b3ccb0b8429d5edbc53210f7a9f5ef5d965f164836c5a  scripts/validate_v16_gradient_opportunity.py" | sha256sum -c
+          printf '%s\n' "bundleSha256=f4501a66023b6e6c177b213aa8c2f4671ed0f1a7f247c0898fa199b6d0c76dd6" "contractSha256=5203e552dd40224f110eacbdaa72f91dbdec5022e964e90aab7d3bd733d3c3a5" "testSha256=f776a138707192b1f4679aaea785ccbafa096036773c31a36a038df7c71c2e36" "validatorSha256=b1c0daec7ce318d1724b3ccb0b8429d5edbc53210f7a9f5ef5d965f164836c5a" > reports/v16_source_binding.txt
+          node --check scripts/build_v15_7_50_pool_manifest.js
+          node --check test/v16_gradient_opportunity_market_polygon_fork.js
+          python -m py_compile scripts/validate_v16_gradient_opportunity.py
+          npx hardhat compile --force 2>&1 | tee reports/v16_compile.log
+
+      - name: Build immutable 50-pool Polygon manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build_v15_7_50_pool_manifest.js 2>&1 | tee reports/v16_manifest.log
+          test -s reports/v15_7_50_pool_manifest.json
+
+      - name: Start pinned Polygon archive fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          anvil \
+            --fork-url "$POLYGON_RPC_URL" \
+            --fork-block-number "$FORK_BLOCK_NUMBER" \
+            --chain-id 137 \
+            --hardfork cancun \
+            --host 127.0.0.1 \
+            --port 8545 \
+            > reports/v16_anvil.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s "$LOCAL_FORK_URL" \
+              -H 'content-type: application/json' \
+              --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              | grep -q '0x89'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat reports/v16_anvil.log
+          exit 1
+
+      - name: Execute exact V16 fork test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx hardhat test test/v16_gradient_opportunity_market_polygon_fork.js \
+            --network polygonFork \
+            2>&1 | tee reports/v16_fork.log
+
+      - name: Validate strict accounting and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate_v16_gradient_opportunity.py 2>&1 | tee reports/v16_validator.log
+          grep -q '"verdict": "PASS"' reports/v16_gradient_opportunity_verdict.json
+
+      - name: Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          find artifacts/contracts/v16 reports -type f ! -name v16_sha256.txt \
+            -print0 | sort -z | xargs -0 sha256sum > reports/v16_sha256.txt
+          sha256sum -c reports/v16_sha256.txt
+
+      - name: Upload V16 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: synergy-v16-gradient-opportunity-market-structural-fork
+          path: |
+            v8_graph_ci/artifacts/contracts/v16
+            v8_graph_ci/reports/v15_7_50_pool_manifest.json
+            v8_graph_ci/reports/v16_*
+          if-no-files-found: error
+          compression-level: 6
