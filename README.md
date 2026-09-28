@@ -40,3 +40,38 @@ client-side success != settlement
 - [ ] добавить privacy/security notes;
 - [ ] автоматизировать проверку битых ссылок;
 - [ ] связывать claims с evidence artifacts.
+
+
+---
+
+# 🌐 Глубокий технический паспорт Quant AI портала
+
+## Фактический `main`
+
+Репозиторий состоит из `README.md` и одного крупного `index.html`. Страница позиционирует SHTENCO QUANT AI TECH, имеет RU/EN переключатель, sticky navigation, hero, продуктовые/исследовательские секции и интенсивную CSS-визуализацию.
+
+```mermaid
+flowchart LR
+    HTML[📄 Single static HTML] --> LANG[RU / EN presentation]
+    LANG --> PROD[📈 Quant/AI product claims]
+    PROD --> USER[👤 Visitor]
+```
+
+## Что является реальным артефактом
+
+Реальным артефактом этого repo является **публичная статическая витрина**. Она не является hedge-fund runtime, trading engine или benchmark authority.
+
+## Failure modes
+
+- marketing copy может опережать состояние кода;
+- двуязычные блоки могут рассинхронизироваться;
+- встроенные числа не имеют автоматической связи с MIDAS evidence;
+- single-file архитектура усложняет review и regression testing.
+
+## Следующий рубеж
+
+- data-driven project cards из federation registry;
+- evidence badges с прямыми ссылками;
+- automated RU/EN consistency check;
+- Lighthouse/accessibility smoke;
+- отделение marketing claims от measured engineering metrics.
