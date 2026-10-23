@@ -38,19 +38,19 @@ The diagram represents conceptual flow; it does not assert a live deployment.
 
 ---
 
-# 🌐 SHTENCO QUANT AI TECH — verified static-portal dossier
+#  SHTENCO QUANT AI TECH — verified static-portal dossier
 
-> **Статус:** 🟡 PRESENTATION / INVESTOR-PITCH STATIC SITE.
+> **Статус:**  PRESENTATION / INVESTOR-PITCH STATIC SITE.
 > **Проверено по фактическому `main`:** 29.09.2026.
 > **Ключевое правило:** числовые и performance-claims внутри `index.html` считаются presentation claims, пока на них нет отдельного воспроизводимого evidence.
 
-## 1. 🎯 Назначение репозитория
+## 1.  Назначение репозитория
 
 `shtencoauantai.github.io` — статический RU/EN web-портал, представляющий Quant/AI направление, MIDAS AI и инвестиционную концепцию.
 
 Этот repository является **presentation surface**. Он не содержит hedge-fund runtime, торговый engine, model training pipeline, quantum backend или audited investment ledger.
 
-## 2. 📦 Фактическое дерево `main`
+## 2.  Фактическое дерево `main`
 
 ```text
 shtencoauantai.github.io/
@@ -72,7 +72,7 @@ shtencoauantai.github.io/
 
 `index.html` — крупная single-file HTML/CSS/JS страница размером около 55 KB.
 
-## 3. 🖥️ Что реально реализовано
+## 3.  Что реально реализовано
 
 В `index.html` есть:
 
@@ -91,7 +91,7 @@ shtencoauantai.github.io/
 
 Это реальный UI-код, который можно открыть в браузере.
 
-## 4. 🚨 Evidence boundary для claims
+## 4.  Evidence boundary для claims
 
 Страница содержит, среди прочего, такие presentation claims:
 
@@ -120,7 +120,7 @@ realized performance
 
 Для каждого такого claim нужен отдельный source/evidence artifact в authoritative repository.
 
-## 5. 🏗️ Архитектура текущего repo
+## 5.  Архитектура текущего repo
 
 ```mermaid
 flowchart LR
@@ -134,7 +134,7 @@ flowchart LR
 
 Это полностью client-side presentation chain.
 
-## 6. 📥 Inputs
+## 6.  Inputs
 
 Фактические inputs:
 
@@ -146,7 +146,7 @@ flowchart LR
 
 Нет фактического market-data/API input в этом repository.
 
-## 7. 📤 Outputs
+## 7.  Outputs
 
 - rendered RU/EN page;
 - visual metrics/cards;
@@ -156,7 +156,7 @@ flowchart LR
 
 Ни один output не является trading signal или financial statement.
 
-## 8. ⚠️ Найденный asset issue
+## 8.  Найденный asset issue
 
 HTML содержит:
 
@@ -172,7 +172,7 @@ HTML содержит:
 
 Это пример того, почему README должен опираться на фактическое дерево.
 
-## 9. 🛡️ Authority boundaries
+## 9.  Authority boundaries
 
 ```text
 static return target       != realized return
@@ -186,7 +186,7 @@ site technology section    != source-code implementation
 
 Portal не должен становиться source of truth для engineering maturity.
 
-## 10. 🔐 Security / privacy model
+## 10.  Security / privacy model
 
 Текущий сайт статический. Основные требования:
 
@@ -199,7 +199,7 @@ Portal не должен становиться source of truth для engineeri
 - contact forms, если будут добавлены, требуют backend/privacy model;
 - investment-related content должен иметь clear evidence/disclaimer boundary.
 
-## 11. ⚠️ Failure modes
+## 11.  Failure modes
 
 | Failure | Последствие |
 |---|---|
@@ -212,7 +212,7 @@ Portal не должен становиться source of truth для engineeri
 | нет automated link check | stale external URLs |
 | marketing status diverges from federation | два источника истины |
 
-## 12. 🧪 Required validation suite
+## 12.  Required validation suite
 
 Для превращения portal в verified presentation artifact нужны:
 
@@ -228,7 +228,7 @@ Portal не должен становиться source of truth для engineeri
 - screenshot regression;
 - CSP review.
 
-## 13. 📊 Claim-to-evidence model
+## 13.  Claim-to-evidence model
 
 Следующий правильный формат:
 
@@ -254,7 +254,7 @@ UI должен отличать:
 - roadmap;
 - unverified presentation.
 
-## 14. 🛠️ Воспроизводимость
+## 14.  Воспроизводимость
 
 Текущий сайт можно воспроизвести локально:
 
@@ -268,19 +268,19 @@ python -m http.server 8000
 
 Нужно ожидать, что `000999.mp3` не загрузится, пока asset отсутствует.
 
-## 15. 🗺️ Карта репозитория
+## 15.  Карта репозитория
 
 | Путь | Назначение |
 |---|---|
 | `index.html` | весь static portal |
 | `README.md` | verified technical dossier |
-| `000999.mp3` | referenced by HTML, ❌ отсутствует |
-| `.github/workflows/` | ❌ отсутствует |
-| `tests/` | ❌ |
-| `evidence/` | ❌ |
-| backend | ❌ |
+| `000999.mp3` | referenced by HTML,  отсутствует |
+| `.github/workflows/` |  отсутствует |
+| `tests/` |  |
+| `evidence/` |  |
+| backend |  |
 
-## 16. 🔗 Место в SYNERGY
+## 16.  Место в SYNERGY
 
 Это public presentation surface, связанный по тематике с:
 
@@ -291,21 +291,21 @@ python -m http.server 8000
 
 Связь тематическая/presentation и **не доказывает runtime dependency**.
 
-## 17. 📊 Evidence maturity
+## 17.  Evidence maturity
 
 | Layer | Status |
 |---|---|
-| static portal source | ✅ |
-| RU/EN interface | ✅ |
-| responsive styling | ✅ |
-| automated tests | ❌ |
-| CI/deploy evidence | ❌ |
-| claim-to-evidence mapping | ❌ |
-| verified performance figures | ❌ in this repo |
-| hedge-fund runtime | ❌ |
-| model runtime | ❌ |
+| static portal source |  |
+| RU/EN interface |  |
+| responsive styling |  |
+| automated tests |  |
+| CI/deploy evidence |  |
+| claim-to-evidence mapping |  |
+| verified performance figures |  in this repo |
+| hedge-fund runtime |  |
+| model runtime |  |
 
-## 18. 🚀 Roadmap
+## 18.  Roadmap
 
 1. убрать/добавить missing audio asset;
 2. добавить CI static checks;
@@ -318,7 +318,7 @@ python -m http.server 8000
 9. split CSS/JS/content при дальнейшем росте;
 10. автогенерировать status badges из federation registry.
 
-## 19. 🛑 Что project НЕ доказывает
+## 19.  Что project НЕ доказывает
 
 - реальную оценку IP;
 - будущую/гарантированную доходность;
@@ -334,4 +334,4 @@ python -m http.server 8000
 
 ---
 
-[🧭 SYNERGY SYSTEM](https://github.com/Shtenco/synergy_system) · [📚 Атлас 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md) · [🧾 Registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
+[ SYNERGY SYSTEM](https://github.com/Shtenco/synergy_system) · [ Атлас 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md) · [ Registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
