@@ -1,3 +1,43 @@
+<div align="center">
+
+<img src="assets/readme/hero.svg" alt="QUANT AI / PORTFOLIO vector hero" width="100%"/>
+
+**Static research and investment concept presentation**
+
+[Overview](#verified-overview) · [Architecture](#architecture-map) · [Evidence](#evidence-boundary) · [Documentation](#original-technical-documentation)
+
+</div>
+
+## Verified overview
+
+Static research and investment concept presentation. Main repository entry: `index.html`. This page presents a research or engineering codebase and does not imply verified production deployment.
+
+## Architecture map
+
+```mermaid
+flowchart LR
+A[Source and configuration] --> B[Implemented project modules]
+B --> C[Output or presentation]
+C --> D[Independent validation and review]
+```
+
+The diagram represents conceptual flow; it does not assert a live deployment.
+
+## Evidence boundary
+
+> Presentation targets and financial metrics must not be confused with audited performance.
+
+| Domain | Interpretation |
+|:--|:--|
+| Repository files | Inspectable implementation artifacts |
+| Test and CI results | Require separate current run evidence |
+| Performance metrics | Require timestamped and reproducible evaluation |
+| Production claims | Not established solely by documentation |
+
+## Original technical documentation
+
+---
+
 # 🌐 SHTENCO QUANT AI TECH — verified static-portal dossier
 
 > **Статус:** 🟡 PRESENTATION / INVESTOR-PITCH STATIC SITE.
